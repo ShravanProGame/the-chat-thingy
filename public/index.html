@@ -28,7 +28,7 @@
       text-shadow: 2px 2px 4px #000;
       z-index: 100;
       font-size: 16px;
-      background: rgba(0,0,0,0.5);
+      background: rgba(0,0,0,0.7);
       padding: 15px;
       border: 2px solid #ff0;
     }
@@ -57,19 +57,25 @@
     .chatMsg {
       margin: 3px 0;
     }
+    #chatInputContainer {
+      display: none;
+    }
+    #chatInputContainer.active {
+      display: block;
+    }
     #chatInput {
       width: 100%;
       padding: 10px;
       background: rgba(0, 0, 0, 0.9);
-      border: 2px solid #0f0;
-      color: #0f0;
+      border: 2px solid #0ff;
+      color: #0ff;
       font-family: 'Courier New', monospace;
       font-size: 14px;
-      display: none;
     }
     #chatInput:focus {
       outline: none;
       border-color: #0ff;
+      box-shadow: 0 0 10px #0ff;
     }
     #deathScreen {
       position: fixed;
@@ -153,7 +159,7 @@
       position: fixed;
       top: 20px;
       right: 20px;
-      background: rgba(0,0,0,0.5);
+      background: rgba(0,0,0,0.7);
       padding: 15px;
       border: 2px solid #0ff;
       color: #0ff;
@@ -167,11 +173,10 @@
     <h1>⚠ THE BACKROOMS ⚠</h1>
     <p><strong>WASD</strong> - Move around</p>
     <p><strong>MOUSE</strong> - Look around</p>
-    <p><strong>ENTER</strong> - Open chat</p>
-    <p><strong>ESC</strong> - Close chat</p>
-    <p style="margin-top: 20px; color: #f00;">Avoid the entities. They hunt in the dark.</p>
+    <p><strong>T</strong> - Open chat</p>
+    <p style="margin-top: 20px; color: #f00;">Avoid the red entities. They will hunt you.</p>
     <p style="color: #0f0;">Share this URL with friends to play together!</p>
-    <button id="startBtn" onclick="startGame()">ENTER THE BACKROOMS</button>
+    <button id="startBtn">ENTER THE BACKROOMS</button>
   </div>
 
   <canvas id="gameCanvas"></canvas>
@@ -185,17 +190,20 @@
   <div id="controls">
     <div>WASD - Move</div>
     <div>MOUSE - Look</div>
-    <div>ENTER - Chat</div>
+    <div>T - Chat</div>
+    <div>CLICK - Lock Mouse</div>
   </div>
 
   <div id="chat">
     <div id="messages"></div>
-    <input type="text" id="chatInput" placeholder="Type message and press Enter..." maxlength="100">
+    <div id="chatInputContainer">
+      <input type="text" id="chatInput" placeholder="Type and press ENTER to send..." maxlength="100">
+    </div>
   </div>
 
   <div id="deathScreen">
     <div id="deathText">YOU DIED</div>
-    <button id="respawnBtn" onclick="location.reload()">RESPAWN</button>
+    <button id="respawnBtn">RESPAWN</button>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -209,25 +217,26 @@
     let chatting = false;
     let gameStarted = false;
     let myPlayerId = null;
-    let lastEmitTime = 0;
+    let yaw = 0;
+    let pitch = 0;
 
-    function startGame() {
+    // Start button
+    document.getElementById('startBtn').addEventListener('click', () => {
       document.getElementById('instructions').style.display = 'none';
       gameStarted = true;
-      
-      // Request pointer lock
-      const canvas = document.getElementById('gameCanvas');
-      canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock;
-      canvas.requestPointerLock();
-      
       init();
-      addChatMessage('🎮 Welcome to the Backrooms! Press ENTER to chat.');
-    }
+      addChatMessage('🎮 Game started! Press T to chat. Click to lock mouse.');
+    });
+
+    // Respawn button
+    document.getElementById('respawnBtn').addEventListener('click', () => {
+      location.reload();
+    });
 
     function init() {
-      console.log('Initializing game...');
+      console.log('🎮 Starting game...');
       
-      // Scene setup
+      // Scene
       scene = new THREE.Scene();
       scene.background = new THREE.Color(0x1a1a1a);
       scene.fog = new THREE.Fog(0x1a1a1a, 10, 60);
@@ -241,47 +250,41 @@
       renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       
       // Lights
-      const ambientLight = new THREE.AmbientLight(0xd4c5a0, 0.4);
+      const ambientLight = new THREE.AmbientLight(0xd4c5a0, 0.5);
       scene.add(ambientLight);
       
-      // Create backrooms environment
+      // Build world
       createBackrooms();
       
-      console.log('Connecting to server...');
-      
-      // Socket connection
+      // Connect to server
+      console.log('🌐 Connecting to server...');
       socket = io();
       
       socket.on('connect', () => {
-        console.log('Connected to server!');
+        console.log('✅ Connected!');
+        addChatMessage('✅ Connected to server!');
       });
       
       socket.on('init', (data) => {
-        console.log('Received init data:', data);
+        console.log('📦 Got init data:', data);
         myPlayerId = data.id;
         
-        // Add other players
         for (let id in data.players) {
           if (id !== data.id) {
             addOtherPlayer(data.players[id]);
           }
         }
         
-        // Add entities
         data.entities.forEach(e => addEntity(e));
-        
         updatePlayerCount();
-        addChatMessage('✅ Connected! You can now see other players.');
       });
       
       socket.on('playerJoined', (playerData) => {
-        console.log('Player joined:', playerData);
         addOtherPlayer(playerData);
         updatePlayerCount();
-        addChatMessage('👤 A player joined the game');
+        addChatMessage('👤 Player joined');
       });
       
       socket.on('playerMoved', (data) => {
@@ -292,12 +295,11 @@
       });
       
       socket.on('playerLeft', (id) => {
-        console.log('Player left:', id);
         if (otherPlayers[id]) {
           scene.remove(otherPlayers[id].mesh);
           delete otherPlayers[id];
           updatePlayerCount();
-          addChatMessage('👋 A player left the game');
+          addChatMessage('👋 Player left');
         }
       });
       
@@ -317,7 +319,6 @@
       
       socket.on('death', () => {
         document.getElementById('deathScreen').classList.add('active');
-        addChatMessage('💀 You died!');
       });
       
       socket.on('chatMessage', (data) => {
@@ -325,63 +326,97 @@
         addChatMessage(`${isMe ? 'You' : 'Player'}: ${data.message}`);
       });
       
-      socket.on('disconnect', () => {
-        console.log('Disconnected from server');
-        addChatMessage('⚠ Disconnected from server');
-      });
+      // Input handlers
+      document.addEventListener('keydown', handleKeyDown);
+      document.addEventListener('keyup', handleKeyUp);
+      document.addEventListener('mousemove', handleMouseMove);
       
-      // Controls
-      document.addEventListener('keydown', onKeyDown);
-      document.addEventListener('keyup', onKeyUp);
-      document.addEventListener('mousemove', onMouseMove);
-      
-      // Pointer lock change
-      document.addEventListener('pointerlockchange', () => {
-        if (!document.pointerLockElement && !chatting) {
-          console.log('Pointer lock lost');
+      // Click to lock mouse
+      canvas.addEventListener('click', () => {
+        if (gameStarted && !chatting) {
+          canvas.requestPointerLock();
         }
       });
       
-      // Chat controls
+      // Chat input
       const chatInput = document.getElementById('chatInput');
       chatInput.addEventListener('keydown', (e) => {
-        e.stopPropagation();
-        
         if (e.key === 'Enter') {
+          e.preventDefault();
           const msg = chatInput.value.trim();
           if (msg && socket) {
             socket.emit('chat', msg);
             chatInput.value = '';
           }
-          chatInput.style.display = 'none';
-          chatting = false;
-          
-          // Re-lock pointer
-          const canvas = document.getElementById('gameCanvas');
-          canvas.requestPointerLock();
-          
+          closeChat();
         } else if (e.key === 'Escape') {
-          chatInput.style.display = 'none';
-          chatInput.value = '';
-          chatting = false;
-          
-          const canvas = document.getElementById('gameCanvas');
-          canvas.requestPointerLock();
+          e.preventDefault();
+          closeChat();
         }
       });
       
-      console.log('Game initialized! Starting animation loop...');
       animate();
+    }
+
+    function handleKeyDown(e) {
+      if (chatting) return;
+      
+      const key = e.key.toLowerCase();
+      
+      if (key === 't') {
+        e.preventDefault();
+        openChat();
+        return;
+      }
+      
+      if (key === 'w') moveForward = true;
+      if (key === 's') moveBackward = true;
+      if (key === 'a') moveLeft = true;
+      if (key === 'd') moveRight = true;
+    }
+
+    function handleKeyUp(e) {
+      const key = e.key.toLowerCase();
+      if (key === 'w') moveForward = false;
+      if (key === 's') moveBackward = false;
+      if (key === 'a') moveLeft = false;
+      if (key === 'd') moveRight = false;
+    }
+
+    function handleMouseMove(e) {
+      if (!gameStarted || chatting || !document.pointerLockElement) return;
+      
+      yaw -= e.movementX * 0.002;
+      pitch -= e.movementY * 0.002;
+      pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+      
+      camera.rotation.order = 'YXZ';
+      camera.rotation.y = yaw;
+      camera.rotation.x = pitch;
+    }
+
+    function openChat() {
+      chatting = true;
+      document.exitPointerLock();
+      document.getElementById('chatInputContainer').classList.add('active');
+      document.getElementById('chatInput').focus();
+      console.log('💬 Chat opened');
+    }
+
+    function closeChat() {
+      chatting = false;
+      document.getElementById('chatInputContainer').classList.remove('active');
+      document.getElementById('chatInput').value = '';
+      document.getElementById('gameCanvas').requestPointerLock();
+      console.log('💬 Chat closed');
     }
 
     function createBackrooms() {
       // Floor
       const floorGeometry = new THREE.PlaneGeometry(300, 300);
-      const floorTexture = new THREE.TextureRepeat = 20;
       const floorMaterial = new THREE.MeshStandardMaterial({ 
         color: 0xc9b896,
-        roughness: 0.9,
-        metalness: 0.1
+        roughness: 0.9
       });
       const floor = new THREE.Mesh(floorGeometry, floorMaterial);
       floor.rotation.x = -Math.PI / 2;
@@ -389,33 +424,25 @@
       scene.add(floor);
       
       // Ceiling
-      const ceilingMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0xd4c5a0,
-        roughness: 0.8
-      });
-      const ceiling = new THREE.Mesh(floorGeometry, ceilingMaterial);
+      const ceiling = floor.clone();
       ceiling.rotation.x = Math.PI / 2;
       ceiling.position.y = 3;
-      ceiling.receiveShadow = true;
       scene.add(ceiling);
       
-      // Walls - create a maze-like structure
+      // Walls
       const wallMaterial = new THREE.MeshStandardMaterial({ 
         color: 0xe6d5a8,
         roughness: 0.9
       });
       
-      // Create grid of walls
       for (let x = -50; x < 50; x += 10) {
         for (let z = -50; z < 50; z += 10) {
           if (Math.random() > 0.3) {
-            const isVertical = Math.random() > 0.5;
-            const wallGeometry = new THREE.BoxGeometry(
-              isVertical ? 0.3 : 8,
-              3,
-              isVertical ? 8 : 0.3
+            const vertical = Math.random() > 0.5;
+            const wall = new THREE.Mesh(
+              new THREE.BoxGeometry(vertical ? 0.3 : 8, 3, vertical ? 8 : 0.3),
+              wallMaterial
             );
-            const wall = new THREE.Mesh(wallGeometry, wallMaterial);
             wall.position.set(x + Math.random() * 5, 1.5, z + Math.random() * 5);
             wall.castShadow = true;
             wall.receiveShadow = true;
@@ -424,15 +451,14 @@
         }
       }
       
-      // Fluorescent lights
+      // Lights
       for (let x = -40; x < 40; x += 15) {
         for (let z = -40; z < 40; z += 15) {
           const light = new THREE.PointLight(0xffffcc, 1, 25);
-          light.position.set(x + Math.random() * 5, 2.7, z + Math.random() * 5);
+          light.position.set(x, 2.7, z);
           light.castShadow = true;
           scene.add(light);
           
-          // Light fixture
           const lightBox = new THREE.Mesh(
             new THREE.BoxGeometry(2.5, 0.1, 0.7),
             new THREE.MeshBasicMaterial({ color: 0xffffdd })
@@ -441,102 +467,50 @@
           scene.add(lightBox);
         }
       }
-      
-      console.log('Backrooms environment created');
     }
 
-    function addOtherPlayer(playerData) {
-      const geometry = new THREE.CapsuleGeometry(0.4, 1.2, 4, 8);
-      const material = new THREE.MeshStandardMaterial({ 
-        color: 0x00ff00,
-        emissive: 0x00ff00,
-        emissiveIntensity: 0.3
-      });
-      const playerMesh = new THREE.Mesh(geometry, material);
-      playerMesh.position.set(playerData.x, playerData.y, playerData.z);
-      playerMesh.castShadow = true;
-      scene.add(playerMesh);
-      
-      otherPlayers[playerData.id] = { mesh: playerMesh };
-      console.log('Added other player:', playerData.id);
+    function addOtherPlayer(data) {
+      const mesh = new THREE.Mesh(
+        new THREE.CapsuleGeometry(0.4, 1.2, 4, 8),
+        new THREE.MeshStandardMaterial({ 
+          color: 0x00ff00,
+          emissive: 0x00ff00,
+          emissiveIntensity: 0.5
+        })
+      );
+      mesh.position.set(data.x, data.y, data.z);
+      mesh.castShadow = true;
+      scene.add(mesh);
+      otherPlayers[data.id] = { mesh };
     }
 
-    function addEntity(entityData) {
-      const geometry = new THREE.BoxGeometry(0.8, 2.5, 0.8);
-      const material = new THREE.MeshStandardMaterial({ 
-        color: 0x000000,
-        emissive: 0xff0000,
-        emissiveIntensity: 0.8
-      });
-      const entityMesh = new THREE.Mesh(geometry, material);
-      entityMesh.position.set(entityData.x, entityData.y, entityData.z);
-      entityMesh.castShadow = true;
-      scene.add(entityMesh);
-      entities.push(entityMesh);
-      console.log('Added entity:', entityData.id);
-    }
-
-    function onKeyDown(e) {
-      if (chatting) return;
-      
-      if (e.key === 'Enter') {
-        chatting = true;
-        const chatInput = document.getElementById('chatInput');
-        chatInput.style.display = 'block';
-        chatInput.focus();
-        document.exitPointerLock();
-        return;
-      }
-      
-      switch(e.key.toLowerCase()) {
-        case 'w': moveForward = true; break;
-        case 's': moveBackward = true; break;
-        case 'a': moveLeft = true; break;
-        case 'd': moveRight = true; break;
-      }
-    }
-
-    function onKeyUp(e) {
-      switch(e.key.toLowerCase()) {
-        case 'w': moveForward = false; break;
-        case 's': moveBackward = false; break;
-        case 'a': moveLeft = false; break;
-        case 'd': moveRight = false; break;
-      }
-    }
-
-    let yaw = 0;
-    let pitch = 0;
-
-    function onMouseMove(e) {
-      if (!gameStarted || chatting || !document.pointerLockElement) return;
-      
-      const sensitivity = 0.002;
-      yaw -= e.movementX * sensitivity;
-      pitch -= e.movementY * sensitivity;
-      
-      // Clamp pitch
-      pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
-      
-      camera.rotation.order = 'YXZ';
-      camera.rotation.y = yaw;
-      camera.rotation.x = pitch;
+    function addEntity(data) {
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.8, 2.5, 0.8),
+        new THREE.MeshStandardMaterial({ 
+          color: 0x000000,
+          emissive: 0xff0000,
+          emissiveIntensity: 1
+        })
+      );
+      mesh.position.set(data.x, data.y, data.z);
+      mesh.castShadow = true;
+      scene.add(mesh);
+      entities.push(mesh);
     }
 
     function updatePlayerCount() {
-      const count = Object.keys(otherPlayers).length + 1;
-      document.getElementById('playerCount').textContent = count;
+      document.getElementById('playerCount').textContent = Object.keys(otherPlayers).length + 1;
     }
 
     function addChatMessage(msg) {
       const messages = document.getElementById('messages');
-      const msgEl = document.createElement('div');
-      msgEl.className = 'chatMsg';
-      msgEl.textContent = msg;
-      messages.appendChild(msgEl);
+      const div = document.createElement('div');
+      div.className = 'chatMsg';
+      div.textContent = msg;
+      messages.appendChild(div);
       messages.scrollTop = messages.scrollHeight;
       
-      // Auto-hide old messages
       if (messages.children.length > 50) {
         messages.removeChild(messages.firstChild);
       }
@@ -547,47 +521,49 @@
       setTimeout(() => { document.body.style.background = '#000'; }, 100);
     }
 
+    let lastSend = 0;
+
     function animate() {
       requestAnimationFrame(animate);
       
       if (!chatting && gameStarted) {
-        // Movement
         const speed = 0.15;
-        const direction = new THREE.Vector3();
+        const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+        forward.y = 0;
+        forward.normalize();
         
-        if (moveForward) direction.z -= 1;
-        if (moveBackward) direction.z += 1;
-        if (moveLeft) direction.x -= 1;
-        if (moveRight) direction.x += 1;
+        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+        right.y = 0;
+        right.normalize();
         
-        if (direction.length() > 0) {
-          direction.normalize();
-          
-          // Apply camera rotation to movement
-          const forward = new THREE.Vector3(0, 0, -1);
-          forward.applyQuaternion(camera.quaternion);
-          forward.y = 0;
-          forward.normalize();
-          
-          const right = new THREE.Vector3(1, 0, 0);
-          right.applyQuaternion(camera.quaternion);
-          right.y = 0;
-          right.normalize();
-          
-          camera.position.add(forward.multiplyScalar(direction.z * speed));
-          camera.position.add(right.multiplyScalar(direction.x * speed));
-          
-          // Send position to server (throttled)
-          const now = Date.now();
-          if (socket && now - lastEmitTime > 50) {
-            socket.emit('move', {
-              x: camera.position.x,
-              y: camera.position.y,
-              z: camera.position.z,
-              rotation: yaw
-            });
-            lastEmitTime = now;
-          }
+        let moved = false;
+        
+        if (moveForward) {
+          camera.position.add(forward.multiplyScalar(speed));
+          moved = true;
+        }
+        if (moveBackward) {
+          camera.position.add(forward.multiplyScalar(-speed));
+          moved = true;
+        }
+        if (moveLeft) {
+          camera.position.add(right.multiplyScalar(-speed));
+          moved = true;
+        }
+        if (moveRight) {
+          camera.position.add(right.multiplyScalar(speed));
+          moved = true;
+        }
+        
+        const now = Date.now();
+        if (socket && moved && now - lastSend > 50) {
+          socket.emit('move', {
+            x: camera.position.x,
+            y: camera.position.y,
+            z: camera.position.z,
+            rotation: yaw
+          });
+          lastSend = now;
         }
       }
       
@@ -598,14 +574,6 @@
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-
-    // Click to re-lock pointer if lost
-    document.getElementById('gameCanvas').addEventListener('click', () => {
-      if (gameStarted && !chatting) {
-        const canvas = document.getElementById('gameCanvas');
-        canvas.requestPointerLock();
-      }
     });
   </script>
 </body>
