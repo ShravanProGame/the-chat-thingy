@@ -27,13 +27,15 @@
       color: #fff;
       text-shadow: 2px 2px 4px #000;
       z-index: 100;
-      font-size: 14px;
+      font-size: 16px;
+      background: rgba(0,0,0,0.5);
+      padding: 15px;
+      border: 2px solid #ff0;
     }
     #health {
-      background: rgba(255, 0, 0, 0.3);
-      padding: 10px;
-      margin-bottom: 10px;
-      border: 2px solid #f00;
+      color: #f00;
+      font-size: 18px;
+      margin-bottom: 5px;
     }
     #chat {
       position: fixed;
@@ -43,22 +45,31 @@
       z-index: 100;
     }
     #messages {
-      background: rgba(0, 0, 0, 0.7);
+      background: rgba(0, 0, 0, 0.8);
       color: #0f0;
       padding: 10px;
       height: 150px;
       overflow-y: auto;
       margin-bottom: 10px;
-      font-size: 12px;
-      border: 1px solid #0f0;
+      font-size: 13px;
+      border: 2px solid #0f0;
+    }
+    .chatMsg {
+      margin: 3px 0;
     }
     #chatInput {
       width: 100%;
-      padding: 8px;
-      background: rgba(0, 0, 0, 0.8);
-      border: 1px solid #0f0;
+      padding: 10px;
+      background: rgba(0, 0, 0, 0.9);
+      border: 2px solid #0f0;
       color: #0f0;
       font-family: 'Courier New', monospace;
+      font-size: 14px;
+      display: none;
+    }
+    #chatInput:focus {
+      outline: none;
+      border-color: #0ff;
     }
     #deathScreen {
       position: fixed;
@@ -66,10 +77,11 @@
       left: 0;
       width: 100vw;
       height: 100vh;
-      background: rgba(255, 0, 0, 0.3);
+      background: rgba(255, 0, 0, 0.5);
       display: none;
       justify-content: center;
       align-items: center;
+      flex-direction: column;
       z-index: 200;
     }
     #deathScreen.active {
@@ -77,117 +89,179 @@
     }
     #deathText {
       color: #f00;
-      font-size: 48px;
+      font-size: 64px;
       text-shadow: 4px 4px 8px #000;
-      animation: flicker 0.5s infinite;
+      animation: flicker 0.3s infinite;
+      margin-bottom: 20px;
+    }
+    #respawnBtn {
+      padding: 15px 40px;
+      background: #f00;
+      border: none;
+      color: #fff;
+      font-size: 20px;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+    }
+    #respawnBtn:hover {
+      background: #c00;
     }
     @keyframes flicker {
       0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
+      50% { opacity: 0.3; }
     }
     #instructions {
       position: fixed;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: rgba(0, 0, 0, 0.9);
-      color: #fff;
-      padding: 30px;
-      border: 2px solid #ff0;
+      background: rgba(0, 0, 0, 0.95);
+      color: #ff0;
+      padding: 40px;
+      border: 3px solid #ff0;
       text-align: center;
       z-index: 300;
+      max-width: 600px;
     }
-    #instructions h2 {
-      color: #ff0;
-      margin-bottom: 20px;
+    #instructions h1 {
+      font-size: 48px;
+      margin-bottom: 30px;
+      text-shadow: 3px 3px 6px #000;
     }
-    #instructions button {
-      margin-top: 20px;
-      padding: 10px 30px;
+    #instructions p {
+      font-size: 18px;
+      margin: 10px 0;
+      color: #fff;
+    }
+    #instructions strong {
+      color: #0f0;
+    }
+    #startBtn {
+      margin-top: 30px;
+      padding: 15px 50px;
       background: #ff0;
       border: none;
       cursor: pointer;
-      font-size: 16px;
+      font-size: 20px;
       font-family: 'Courier New', monospace;
+      font-weight: bold;
     }
-    #instructions button:hover {
+    #startBtn:hover {
       background: #cc0;
+    }
+    #controls {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(0,0,0,0.5);
+      padding: 15px;
+      border: 2px solid #0ff;
+      color: #0ff;
+      z-index: 100;
+      font-size: 14px;
     }
   </style>
 </head>
 <body>
   <div id="instructions">
-    <h2>THE BACKROOMS</h2>
-    <p><strong>WASD</strong> - Move</p>
-    <p><strong>Mouse</strong> - Look around</p>
-    <p><strong>Enter</strong> - Chat</p>
-    <p><br>Survive. Explore. Escape.</p>
-    <button onclick="startGame()">ENTER THE BACKROOMS</button>
+    <h1>⚠ THE BACKROOMS ⚠</h1>
+    <p><strong>WASD</strong> - Move around</p>
+    <p><strong>MOUSE</strong> - Look around</p>
+    <p><strong>ENTER</strong> - Open chat</p>
+    <p><strong>ESC</strong> - Close chat</p>
+    <p style="margin-top: 20px; color: #f00;">Avoid the entities. They hunt in the dark.</p>
+    <p style="color: #0f0;">Share this URL with friends to play together!</p>
+    <button id="startBtn" onclick="startGame()">ENTER THE BACKROOMS</button>
   </div>
 
   <canvas id="gameCanvas"></canvas>
   
   <div id="ui">
-    <div id="health">HEALTH: <span id="healthValue">100</span></div>
-    <div>PLAYERS: <span id="playerCount">1</span></div>
-    <div>LEVEL: 0</div>
+    <div id="health">❤ HEALTH: <span id="healthValue">100</span></div>
+    <div>👥 PLAYERS: <span id="playerCount">1</span></div>
+    <div>📍 LEVEL: 0</div>
+  </div>
+
+  <div id="controls">
+    <div>WASD - Move</div>
+    <div>MOUSE - Look</div>
+    <div>ENTER - Chat</div>
   </div>
 
   <div id="chat">
     <div id="messages"></div>
-    <input type="text" id="chatInput" placeholder="Press Enter to chat..." style="display:none;">
+    <input type="text" id="chatInput" placeholder="Type message and press Enter..." maxlength="100">
   </div>
 
   <div id="deathScreen">
     <div id="deathText">YOU DIED</div>
+    <button id="respawnBtn" onclick="location.reload()">RESPAWN</button>
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
     let scene, camera, renderer, socket;
-    let player, otherPlayers = {};
+    let otherPlayers = {};
     let entities = [];
     let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
-    let velocity = new THREE.Vector3();
-    let direction = new THREE.Vector3();
     let health = 100;
     let chatting = false;
     let gameStarted = false;
+    let myPlayerId = null;
+    let lastEmitTime = 0;
 
     function startGame() {
       document.getElementById('instructions').style.display = 'none';
       gameStarted = true;
-      document.body.requestPointerLock();
+      
+      // Request pointer lock
+      const canvas = document.getElementById('gameCanvas');
+      canvas.requestPointerLock = canvas.requestPointerLock || canvas.mozRequestPointerLock;
+      canvas.requestPointerLock();
+      
       init();
+      addChatMessage('🎮 Welcome to the Backrooms! Press ENTER to chat.');
     }
 
     function init() {
+      console.log('Initializing game...');
+      
       // Scene setup
       scene = new THREE.Scene();
-      scene.fog = new THREE.Fog(0xd4c5a0, 1, 50);
+      scene.background = new THREE.Color(0x1a1a1a);
+      scene.fog = new THREE.Fog(0x1a1a1a, 10, 60);
       
       // Camera
       camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-      camera.position.y = 1.6;
+      camera.position.set(0, 1.6, 5);
       
       // Renderer
-      renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas'), antialias: true });
+      const canvas = document.getElementById('gameCanvas');
+      renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       
       // Lights
-      const ambientLight = new THREE.AmbientLight(0xd4c5a0, 0.6);
+      const ambientLight = new THREE.AmbientLight(0xd4c5a0, 0.4);
       scene.add(ambientLight);
       
       // Create backrooms environment
       createBackrooms();
       
+      console.log('Connecting to server...');
+      
       // Socket connection
       socket = io();
       
+      socket.on('connect', () => {
+        console.log('Connected to server!');
+      });
+      
       socket.on('init', (data) => {
-        camera.position.set(data.players[data.id].x, 1.6, data.players[data.id].z);
+        console.log('Received init data:', data);
+        myPlayerId = data.id;
         
         // Add other players
         for (let id in data.players) {
@@ -198,25 +272,32 @@
         
         // Add entities
         data.entities.forEach(e => addEntity(e));
+        
+        updatePlayerCount();
+        addChatMessage('✅ Connected! You can now see other players.');
       });
       
       socket.on('playerJoined', (playerData) => {
+        console.log('Player joined:', playerData);
         addOtherPlayer(playerData);
         updatePlayerCount();
+        addChatMessage('👤 A player joined the game');
       });
       
       socket.on('playerMoved', (data) => {
         if (otherPlayers[data.id]) {
-          otherPlayers[data.id].position.set(data.x, data.y, data.z);
-          otherPlayers[data.id].rotation.y = data.rotation;
+          otherPlayers[data.id].mesh.position.set(data.x, data.y, data.z);
+          otherPlayers[data.id].mesh.rotation.y = data.rotation;
         }
       });
       
       socket.on('playerLeft', (id) => {
+        console.log('Player left:', id);
         if (otherPlayers[id]) {
-          scene.remove(otherPlayers[id]);
+          scene.remove(otherPlayers[id].mesh);
           delete otherPlayers[id];
           updatePlayerCount();
+          addChatMessage('👋 A player left the game');
         }
       });
       
@@ -236,13 +317,17 @@
       
       socket.on('death', () => {
         document.getElementById('deathScreen').classList.add('active');
-        setTimeout(() => {
-          location.reload();
-        }, 3000);
+        addChatMessage('💀 You died!');
       });
       
-      socket.on('chat', (data) => {
-        addChatMessage(`Player: ${data.message}`);
+      socket.on('chatMessage', (data) => {
+        const isMe = data.id === myPlayerId;
+        addChatMessage(`${isMe ? 'You' : 'Player'}: ${data.message}`);
+      });
+      
+      socket.on('disconnect', () => {
+        console.log('Disconnected from server');
+        addChatMessage('⚠ Disconnected from server');
       });
       
       // Controls
@@ -250,32 +335,53 @@
       document.addEventListener('keyup', onKeyUp);
       document.addEventListener('mousemove', onMouseMove);
       
+      // Pointer lock change
+      document.addEventListener('pointerlockchange', () => {
+        if (!document.pointerLockElement && !chatting) {
+          console.log('Pointer lock lost');
+        }
+      });
+      
       // Chat controls
       const chatInput = document.getElementById('chatInput');
       chatInput.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        
         if (e.key === 'Enter') {
-          if (chatInput.value.trim()) {
-            socket.emit('chat', chatInput.value);
+          const msg = chatInput.value.trim();
+          if (msg && socket) {
+            socket.emit('chat', msg);
             chatInput.value = '';
           }
           chatInput.style.display = 'none';
           chatting = false;
+          
+          // Re-lock pointer
+          const canvas = document.getElementById('gameCanvas');
+          canvas.requestPointerLock();
+          
         } else if (e.key === 'Escape') {
           chatInput.style.display = 'none';
           chatInput.value = '';
           chatting = false;
+          
+          const canvas = document.getElementById('gameCanvas');
+          canvas.requestPointerLock();
         }
       });
       
+      console.log('Game initialized! Starting animation loop...');
       animate();
     }
 
     function createBackrooms() {
       // Floor
-      const floorGeometry = new THREE.PlaneGeometry(200, 200);
+      const floorGeometry = new THREE.PlaneGeometry(300, 300);
+      const floorTexture = new THREE.TextureRepeat = 20;
       const floorMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0xd4c5a0,
-        roughness: 0.8 
+        color: 0xc9b896,
+        roughness: 0.9,
+        metalness: 0.1
       });
       const floor = new THREE.Mesh(floorGeometry, floorMaterial);
       floor.rotation.x = -Math.PI / 2;
@@ -283,74 +389,91 @@
       scene.add(floor);
       
       // Ceiling
-      const ceiling = new THREE.Mesh(floorGeometry, floorMaterial);
+      const ceilingMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0xd4c5a0,
+        roughness: 0.8
+      });
+      const ceiling = new THREE.Mesh(floorGeometry, ceilingMaterial);
       ceiling.rotation.x = Math.PI / 2;
       ceiling.position.y = 3;
+      ceiling.receiveShadow = true;
       scene.add(ceiling);
       
-      // Walls
+      // Walls - create a maze-like structure
       const wallMaterial = new THREE.MeshStandardMaterial({ 
         color: 0xe6d5a8,
-        roughness: 0.9 
+        roughness: 0.9
       });
       
-      for (let i = 0; i < 30; i++) {
-        const wallGeometry = new THREE.BoxGeometry(
-          Math.random() > 0.5 ? 0.2 : Math.random() * 10 + 5,
-          3,
-          Math.random() > 0.5 ? Math.random() * 10 + 5 : 0.2
-        );
-        const wall = new THREE.Mesh(wallGeometry, wallMaterial);
-        wall.position.set(
-          (Math.random() - 0.5) * 80,
-          1.5,
-          (Math.random() - 0.5) * 80
-        );
-        wall.castShadow = true;
-        wall.receiveShadow = true;
-        scene.add(wall);
+      // Create grid of walls
+      for (let x = -50; x < 50; x += 10) {
+        for (let z = -50; z < 50; z += 10) {
+          if (Math.random() > 0.3) {
+            const isVertical = Math.random() > 0.5;
+            const wallGeometry = new THREE.BoxGeometry(
+              isVertical ? 0.3 : 8,
+              3,
+              isVertical ? 8 : 0.3
+            );
+            const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+            wall.position.set(x + Math.random() * 5, 1.5, z + Math.random() * 5);
+            wall.castShadow = true;
+            wall.receiveShadow = true;
+            scene.add(wall);
+          }
+        }
       }
       
       // Fluorescent lights
-      for (let i = 0; i < 20; i++) {
-        const light = new THREE.PointLight(0xffffe0, 0.5, 20);
-        light.position.set(
-          (Math.random() - 0.5) * 80,
-          2.8,
-          (Math.random() - 0.5) * 80
-        );
-        scene.add(light);
-        
-        // Light box
-        const lightBox = new THREE.Mesh(
-          new THREE.BoxGeometry(2, 0.1, 0.5),
-          new THREE.MeshBasicMaterial({ color: 0xffffcc })
-        );
-        lightBox.position.copy(light.position);
-        scene.add(lightBox);
+      for (let x = -40; x < 40; x += 15) {
+        for (let z = -40; z < 40; z += 15) {
+          const light = new THREE.PointLight(0xffffcc, 1, 25);
+          light.position.set(x + Math.random() * 5, 2.7, z + Math.random() * 5);
+          light.castShadow = true;
+          scene.add(light);
+          
+          // Light fixture
+          const lightBox = new THREE.Mesh(
+            new THREE.BoxGeometry(2.5, 0.1, 0.7),
+            new THREE.MeshBasicMaterial({ color: 0xffffdd })
+          );
+          lightBox.position.copy(light.position);
+          scene.add(lightBox);
+        }
       }
+      
+      console.log('Backrooms environment created');
     }
 
     function addOtherPlayer(playerData) {
-      const geometry = new THREE.CapsuleGeometry(0.3, 1, 4, 8);
-      const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+      const geometry = new THREE.CapsuleGeometry(0.4, 1.2, 4, 8);
+      const material = new THREE.MeshStandardMaterial({ 
+        color: 0x00ff00,
+        emissive: 0x00ff00,
+        emissiveIntensity: 0.3
+      });
       const playerMesh = new THREE.Mesh(geometry, material);
       playerMesh.position.set(playerData.x, playerData.y, playerData.z);
+      playerMesh.castShadow = true;
       scene.add(playerMesh);
-      otherPlayers[playerData.id] = playerMesh;
+      
+      otherPlayers[playerData.id] = { mesh: playerMesh };
+      console.log('Added other player:', playerData.id);
     }
 
     function addEntity(entityData) {
-      const geometry = new THREE.BoxGeometry(0.6, 2, 0.6);
+      const geometry = new THREE.BoxGeometry(0.8, 2.5, 0.8);
       const material = new THREE.MeshStandardMaterial({ 
         color: 0x000000,
         emissive: 0xff0000,
-        emissiveIntensity: 0.5
+        emissiveIntensity: 0.8
       });
       const entityMesh = new THREE.Mesh(geometry, material);
       entityMesh.position.set(entityData.x, entityData.y, entityData.z);
+      entityMesh.castShadow = true;
       scene.add(entityMesh);
       entities.push(entityMesh);
+      console.log('Added entity:', entityData.id);
     }
 
     function onKeyDown(e) {
@@ -358,12 +481,14 @@
       
       if (e.key === 'Enter') {
         chatting = true;
-        document.getElementById('chatInput').style.display = 'block';
-        document.getElementById('chatInput').focus();
+        const chatInput = document.getElementById('chatInput');
+        chatInput.style.display = 'block';
+        chatInput.focus();
+        document.exitPointerLock();
         return;
       }
       
-      switch(e.key) {
+      switch(e.key.toLowerCase()) {
         case 'w': moveForward = true; break;
         case 's': moveBackward = true; break;
         case 'a': moveLeft = true; break;
@@ -372,7 +497,7 @@
     }
 
     function onKeyUp(e) {
-      switch(e.key) {
+      switch(e.key.toLowerCase()) {
         case 'w': moveForward = false; break;
         case 's': moveBackward = false; break;
         case 'a': moveLeft = false; break;
@@ -380,27 +505,41 @@
       }
     }
 
+    let yaw = 0;
+    let pitch = 0;
+
     function onMouseMove(e) {
-      if (!gameStarted || chatting) return;
+      if (!gameStarted || chatting || !document.pointerLockElement) return;
       
-      const movementX = e.movementX || 0;
-      const movementY = e.movementY || 0;
+      const sensitivity = 0.002;
+      yaw -= e.movementX * sensitivity;
+      pitch -= e.movementY * sensitivity;
       
-      camera.rotation.y -= movementX * 0.002;
-      camera.rotation.x -= movementY * 0.002;
-      camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x));
+      // Clamp pitch
+      pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+      
+      camera.rotation.order = 'YXZ';
+      camera.rotation.y = yaw;
+      camera.rotation.x = pitch;
     }
 
     function updatePlayerCount() {
-      document.getElementById('playerCount').textContent = Object.keys(otherPlayers).length + 1;
+      const count = Object.keys(otherPlayers).length + 1;
+      document.getElementById('playerCount').textContent = count;
     }
 
     function addChatMessage(msg) {
       const messages = document.getElementById('messages');
       const msgEl = document.createElement('div');
+      msgEl.className = 'chatMsg';
       msgEl.textContent = msg;
       messages.appendChild(msgEl);
       messages.scrollTop = messages.scrollHeight;
+      
+      // Auto-hide old messages
+      if (messages.children.length > 50) {
+        messages.removeChild(messages.firstChild);
+      }
     }
 
     function flashDamage() {
@@ -411,39 +550,44 @@
     function animate() {
       requestAnimationFrame(animate);
       
-      if (!chatting) {
+      if (!chatting && gameStarted) {
         // Movement
-        direction.set(0, 0, 0);
+        const speed = 0.15;
+        const direction = new THREE.Vector3();
+        
         if (moveForward) direction.z -= 1;
         if (moveBackward) direction.z += 1;
         if (moveLeft) direction.x -= 1;
         if (moveRight) direction.x += 1;
-        direction.normalize();
         
-        velocity.x = direction.x * 0.1;
-        velocity.z = direction.z * 0.1;
-        
-        const forward = new THREE.Vector3(0, 0, -1);
-        forward.applyQuaternion(camera.quaternion);
-        forward.y = 0;
-        forward.normalize();
-        
-        const right = new THREE.Vector3(1, 0, 0);
-        right.applyQuaternion(camera.quaternion);
-        right.y = 0;
-        right.normalize();
-        
-        camera.position.add(forward.multiplyScalar(velocity.z));
-        camera.position.add(right.multiplyScalar(velocity.x));
-        
-        // Send position to server
-        if (socket && (velocity.x !== 0 || velocity.z !== 0)) {
-          socket.emit('move', {
-            x: camera.position.x,
-            y: camera.position.y,
-            z: camera.position.z,
-            rotation: camera.rotation.y
-          });
+        if (direction.length() > 0) {
+          direction.normalize();
+          
+          // Apply camera rotation to movement
+          const forward = new THREE.Vector3(0, 0, -1);
+          forward.applyQuaternion(camera.quaternion);
+          forward.y = 0;
+          forward.normalize();
+          
+          const right = new THREE.Vector3(1, 0, 0);
+          right.applyQuaternion(camera.quaternion);
+          right.y = 0;
+          right.normalize();
+          
+          camera.position.add(forward.multiplyScalar(direction.z * speed));
+          camera.position.add(right.multiplyScalar(direction.x * speed));
+          
+          // Send position to server (throttled)
+          const now = Date.now();
+          if (socket && now - lastEmitTime > 50) {
+            socket.emit('move', {
+              x: camera.position.x,
+              y: camera.position.y,
+              z: camera.position.z,
+              rotation: yaw
+            });
+            lastEmitTime = now;
+          }
         }
       }
       
@@ -454,6 +598,14 @@
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Click to re-lock pointer if lost
+    document.getElementById('gameCanvas').addEventListener('click', () => {
+      if (gameStarted && !chatting) {
+        const canvas = document.getElementById('gameCanvas');
+        canvas.requestPointerLock();
+      }
     });
   </script>
 </body>
