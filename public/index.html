@@ -1,150 +1,460 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The Chet</title>
-    <link rel="icon" type="image/png" id="favicon">
-    <style>
-        * {margin: 0;padding: 0;box-sizing: border-box;}
-        body {font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;height: 100vh;overflow: hidden;background: #36393f;}
-        .container {display: flex;height: 100vh;}
-        .sidebar {width: 240px;background: #2f3136;display: flex;flex-direction: column;}
-        .server-header {height: 48px;padding: 0 16px;display: flex;align-items: center;border-bottom: 1px solid #202225;color: #fff;font-weight: 600;font-size: 15px;}
-        .channels {flex: 1;overflow-y: auto;padding: 8px;}
-        .channel-section {margin-bottom: 16px;}
-        .section-header {color: #96989d;font-size: 12px;font-weight: 600;text-transform: uppercase;margin-bottom: 4px;padding: 0 8px;}
-        .channel {padding: 8px 12px;margin: 2px 0;border-radius: 4px;color: #96989d;cursor: pointer;display: flex;align-items: center;justify-content: space-between;font-size: 14px;transition: all 0.15s;position: relative;}
-        .channel:hover {background: #3a3c42;color: #dcddde;}
-        .channel.active {background: #404249;color: #fff;}
-        .channel-name {display: flex;align-items: center;flex: 1;}
-        .channel-name::before {content: '#';margin-right: 6px;font-weight: 600;color: #72767d;}
-        .channel.private .channel-name::before {content: '👤';margin-right: 6px;}
-        .channel-right {display: flex;align-items: center;gap: 4px;}
-        .unread-badge {background: #ed4245;color: #fff;border-radius: 10px;padding: 2px 6px;font-size: 11px;font-weight: 600;min-width: 18px;text-align: center;}
-        .close-dm {opacity: 0;background: transparent;border: none;color: #96989d;cursor: pointer;padding: 2px 6px;border-radius: 3px;font-size: 16px;transition: all 0.15s;}
-        .channel:hover .close-dm {opacity: 1;}
-        .close-dm:hover {background: #ed4245;color: #fff;}
-        .online-users {padding: 8px;border-top: 1px solid #202225;max-height: 200px;overflow-y: auto;}
-        .online-header {color: #96989d;font-size: 12px;font-weight: 600;text-transform: uppercase;margin-bottom: 8px;}
-        .user-list-item {padding: 4px 8px;color: #96989d;font-size: 14px;display: flex;align-items: center;justify-content: space-between;border-radius: 4px;transition: background 0.15s;}
-        .user-list-item:hover {background: #3a3c42;}
-        .user-name {display: flex;align-items: center;}
-        .user-name::before {content: '●';color: #3ba55d;margin-right: 6px;}
-        .dm-btn {opacity: 0;background: #5865f2;color: #fff;border: none;padding: 2px 8px;border-radius: 3px;font-size: 11px;cursor: pointer;transition: all 0.15s;}
-        .user-list-item:hover .dm-btn {opacity: 1;}
-        .dm-btn:hover {background: #4752c4;}
-        .user-area {height: 52px;background: #292b2f;padding: 0 8px;display: flex;align-items: center;border-top: 1px solid #202225;}
-        .user-info {display: flex;align-items: center;flex: 1;}
-        .user-avatar {width: 32px;height: 32px;border-radius: 50%;background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);display: flex;align-items: center;justify-content: center;color: #fff;font-weight: 600;margin-right: 8px;}
-        .username {color: #fff;font-size: 14px;font-weight: 500;}
-        .connection-status {width: 8px;height: 8px;border-radius: 50%;background: #ed4245;margin-left: 8px;}
-        .connection-status.connected {background: #3ba55d;}
-        .main-content {flex: 1;display: flex;flex-direction: column;background: #36393f;}
-        .chat-header {height: 48px;padding: 0 16px;display: flex;align-items: center;justify-content: space-between;border-bottom: 1px solid #202225;color: #fff;}
-        .channel-name-header {font-weight: 600;font-size: 16px;}
-        .channel-name-header::before {content: '#';margin-right: 4px;color: #72767d;}
-        .channel-name-header.private::before {content: '👤';}
-        .typing-indicator {font-size: 12px;color: #72767d;font-style: italic;}
-        .messages {flex: 1;overflow-y: auto;padding: 16px;}
-        .message {display: flex;padding: 4px 0;margin-bottom: 12px;}
-        .message:hover {background: #32353b;margin: 0 -16px 12px;padding: 4px 16px;}
-        .message-avatar {width: 40px;height: 40px;border-radius: 50%;background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);display: flex;align-items: center;justify-content: center;color: #fff;font-weight: 600;margin-right: 16px;flex-shrink: 0;}
-        .message-content {flex: 1;}
-        .message-header {display: flex;align-items: baseline;margin-bottom: 4px;}
-        .message-author {color: #fff;font-weight: 500;font-size: 15px;margin-right: 8px;}
-        .message-timestamp {color: #72767d;font-size: 12px;}
-        .message-text {color: #dcddde;font-size: 15px;line-height: 1.4;word-wrap: break-word;}
-        .message-image {margin-top: 8px;max-width: 400px;max-height: 300px;border-radius: 8px;cursor: pointer;transition: transform 0.2s;display: block;}
-        .message-image:hover {transform: scale(1.02);}
-        .input-area {padding: 16px;}
-        .input-wrapper {background: #40444b;border-radius: 8px;padding: 12px;display: flex;align-items: center;}
-        .attach-btn {background: transparent;border: none;color: #b9bbbe;cursor: pointer;font-size: 20px;padding: 4px 8px;margin-right: 8px;transition: color 0.2s;}
-        .attach-btn:hover {color: #dcddde;}
-        .message-input {flex: 1;background: none;border: none;color: #dcddde;font-size: 15px;outline: none;}
-        .message-input::placeholder {color: #72767d;}
-        .send-btn {background: #5865f2;color: #fff;border: none;padding: 8px 16px;border-radius: 4px;cursor: pointer;font-weight: 500;margin-left: 8px;transition: background 0.2s;}
-        .send-btn:hover {background: #4752c4;}
-        .send-btn:active {background: #3c45a5;}
-        .send-btn:disabled {background: #4e5058;cursor: not-allowed;}
-        .file-input {display: none;}
-        .image-preview {position: relative;display: inline-block;margin-right: 8px;}
-        .preview-image {max-width: 100px;max-height: 100px;border-radius: 4px;}
-        .remove-preview {position: absolute;top: -8px;right: -8px;background: #ed4245;color: #fff;border: none;border-radius: 50%;width: 20px;height: 20px;cursor: pointer;font-size: 12px;display: flex;align-items: center;justify-content: center;}
-        .notifications {position: fixed;top: 16px;right: 16px;z-index: 1000;display: flex;flex-direction: column;gap: 12px;max-width: 400px;}
-        .notification {background: #2f3136;border: 1px solid #202225;border-radius: 8px;padding: 16px;box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);animation: slideIn 0.3s ease;}
-        @keyframes slideIn {from {transform: translateX(400px);opacity: 0;}to {transform: translateX(0);opacity: 1;}}
-        .notification-header {color: #fff;font-weight: 600;font-size: 14px;margin-bottom: 8px;}
-        .notification-body {color: #dcddde;font-size: 14px;margin-bottom: 12px;}
-        .notification-actions {display: flex;gap: 8px;}
-        .notification-btn {flex: 1;padding: 8px;border: none;border-radius: 4px;font-weight: 500;cursor: pointer;transition: all 0.2s;}
-        .btn-accept {background: #3ba55d;color: #fff;}
-        .btn-accept:hover {background: #2d7d46;}
-        .btn-decline {background: #ed4245;color: #fff;}
-        .btn-decline:hover {background: #c03537;}
-        .image-modal {display: none;position: fixed;top: 0;left: 0;width: 100%;height: 100%;background: rgba(0, 0, 0, 0.9);z-index: 2000;justify-content: center;align-items: center;}
-        .image-modal.active {display: flex;}
-        .modal-image {max-width: 90%;max-height: 90%;border-radius: 8px;}
-        .close-modal {position: absolute;top: 20px;right: 20px;background: #ed4245;color: #fff;border: none;border-radius: 50%;width: 40px;height: 40px;font-size: 24px;cursor: pointer;}
-        ::-webkit-scrollbar {width: 8px;}
-        ::-webkit-scrollbar-track {background: #2f3136;}
-        ::-webkit-scrollbar-thumb {background: #202225;border-radius: 4px;}
-        ::-webkit-scrollbar-thumb:hover {background: #1a1c1f;}
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Backrooms Multiplayer</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      overflow: hidden;
+      font-family: 'Courier New', monospace;
+      background: #000;
+    }
+    #gameCanvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+    #ui {
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      color: #fff;
+      text-shadow: 2px 2px 4px #000;
+      z-index: 100;
+      font-size: 14px;
+    }
+    #health {
+      background: rgba(255, 0, 0, 0.3);
+      padding: 10px;
+      margin-bottom: 10px;
+      border: 2px solid #f00;
+    }
+    #chat {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      width: 400px;
+      z-index: 100;
+    }
+    #messages {
+      background: rgba(0, 0, 0, 0.7);
+      color: #0f0;
+      padding: 10px;
+      height: 150px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+      font-size: 12px;
+      border: 1px solid #0f0;
+    }
+    #chatInput {
+      width: 100%;
+      padding: 8px;
+      background: rgba(0, 0, 0, 0.8);
+      border: 1px solid #0f0;
+      color: #0f0;
+      font-family: 'Courier New', monospace;
+    }
+    #deathScreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(255, 0, 0, 0.3);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 200;
+    }
+    #deathScreen.active {
+      display: flex;
+    }
+    #deathText {
+      color: #f00;
+      font-size: 48px;
+      text-shadow: 4px 4px 8px #000;
+      animation: flicker 0.5s infinite;
+    }
+    @keyframes flicker {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    #instructions {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.9);
+      color: #fff;
+      padding: 30px;
+      border: 2px solid #ff0;
+      text-align: center;
+      z-index: 300;
+    }
+    #instructions h2 {
+      color: #ff0;
+      margin-bottom: 20px;
+    }
+    #instructions button {
+      margin-top: 20px;
+      padding: 10px 30px;
+      background: #ff0;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      font-family: 'Courier New', monospace;
+    }
+    #instructions button:hover {
+      background: #cc0;
+    }
+  </style>
 </head>
 <body>
-    <div class="notifications" id="notifications"></div>
-    <div class="image-modal" id="imageModal">
-        <button class="close-modal" id="closeModalBtn">×</button>
-        <img class="modal-image" id="modalImage" src="" alt="Full size image">
-    </div>
-    <div class="container">
-        <div class="sidebar">
-            <div class="server-header">The Chet</div>
-            <div class="channels" id="channelList">
-                <div class="channel-section">
-                    <div class="section-header">Channels</div>
-                    <div class="channel active" data-channel="general"><span class="channel-name">general</span><div class="channel-right"></div></div>
-                    <div class="channel" data-channel="random"><span class="channel-name">random</span><div class="channel-right"></div></div>
-                    <div class="channel" data-channel="gaming"><span class="channel-name">gaming</span><div class="channel-right"></div></div>
-                    <div class="channel" data-channel="memes"><span class="channel-name">memes</span><div class="channel-right"></div></div>
-                </div>
-                <div class="channel-section">
-                    <div class="section-header">Direct Messages</div>
-                    <div id="dmList"></div>
-                </div>
-            </div>
-            <div class="online-users">
-                <div class="online-header">Online Users</div>
-                <div id="userList"></div>
-            </div>
-            <div class="user-area">
-                <div class="user-info">
-                    <div class="user-avatar" id="userAvatar">U</div>
-                    <div class="username" id="usernameDisplay">User</div>
-                    <div class="connection-status" id="connectionStatus"></div>
-                </div>
-            </div>
-        </div>
-        <div class="main-content">
-            <div class="chat-header">
-                <div class="channel-name-header" id="currentChannel">general</div>
-                <div class="typing-indicator" id="typingIndicator"></div>
-            </div>
-            <div class="messages" id="messageArea"></div>
-            <div class="input-area">
-                <div class="input-wrapper">
-                    <input type="file" class="file-input" id="fileInput" accept="image/*">
-                    <button class="attach-btn" id="attachBtn">📎</button>
-                    <div id="imagePreviewContainer"></div>
-                    <input type="text" class="message-input" id="messageInput" placeholder="Message #general" maxlength="150">
-                    <button class="send-btn" id="sendBtn">Send</button>
-                </div>
-            </div>
-        </div>
-    </div>
-    <script>
-const WS_URL=window.location.protocol==='https:'?`wss://${window.location.host}`:`ws://${window.location.hostname}:${window.location.port||3000}`;const state={currentChannel:'general',currentChatType:'channel',currentPrivateChat:null,username:'',ws:null,connected:false,messages:{},privateMessages:{},users:[],typingUsers:{},privateChats:{},selectedImage:null,unreadCounts:{},isTabActive:true,totalUnread:0,originalFavicon:null};const messageArea=document.getElementById('messageArea'),messageInput=document.getElementById('messageInput'),sendBtn=document.getElementById('sendBtn'),channelList=document.getElementById('channelList'),dmList=document.getElementById('dmList'),currentChannelEl=document.getElementById('currentChannel'),usernameDisplay=document.getElementById('usernameDisplay'),userAvatar=document.getElementById('userAvatar'),connectionStatus=document.getElementById('connectionStatus'),userList=document.getElementById('userList'),typingIndicator=document.getElementById('typingIndicator'),notifications=document.getElementById('notifications'),fileInput=document.getElementById('fileInput'),attachBtn=document.getElementById('attachBtn'),imagePreviewContainer=document.getElementById('imagePreviewContainer'),imageModal=document.getElementById('imageModal'),modalImage=document.getElementById('modalImage'),closeModalBtn=document.getElementById('closeModalBtn'),favicon=document.getElementById('favicon');let typingTimeout;function createDefaultFavicon(){const canvas=document.createElement('canvas');canvas.width=32;canvas.height=32;const ctx=canvas.getContext('2d');ctx.fillStyle='#5865f2';ctx.fillRect(0,0,32,32);ctx.fillStyle='#fff';ctx.font='bold 20px Arial';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('C',16,16);return canvas.toDataURL()}function updateFavicon(hasNotification){const canvas=document.createElement('canvas');canvas.width=32;canvas.height=32;const ctx=canvas.getContext('2d');const img=new Image();img.onload=()=>{ctx.drawImage(img,0,0,32,32);if(hasNotification){ctx.fillStyle='#ed4245';ctx.beginPath();ctx.arc(24,8,8,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.stroke()}favicon.href=canvas.toDataURL()};img.src=state.originalFavicon||createDefaultFavicon()}function updateTitle(){if(state.totalUnread>0){document.title=`(${state.totalUnread}) The Chet`}else{document.title='The Chet'}}function incrementUnread(channelId){if(!state.isTabActive||(state.currentChatType==='channel'&&state.currentChannel!==channelId)||(state.currentChatType==='private'&&state.currentPrivateChat!==channelId)){if(!state.unreadCounts[channelId])state.unreadCounts[channelId]=0;state.unreadCounts[channelId]++;state.totalUnread++;updateTitle();updateFavicon(true);updateChannelBadges()}}function clearUnread(channelId){if(state.unreadCounts[channelId]){state.totalUnread-=state.unreadCounts[channelId];state.unreadCounts[channelId]=0;updateTitle();updateFavicon(state.totalUnread>0);updateChannelBadges()}}function updateChannelBadges(){document.querySelectorAll('.channel').forEach(ch=>{const rightDiv=ch.querySelector('.channel-right');if(!rightDiv)return;rightDiv.querySelectorAll('.unread-badge').forEach(b=>b.remove());const channelId=ch.dataset.channel||ch.dataset.chatId;if(state.unreadCounts[channelId]&&state.unreadCounts[channelId]>0){const badge=document.createElement('span');badge.className='unread-badge';badge.textContent=state.unreadCounts[channelId];rightDiv.insertBefore(badge,rightDiv.firstChild)}})}document.addEventListener('visibilitychange',()=>{state.isTabActive=!document.hidden;if(state.isTabActive){const currentId=state.currentChatType==='channel'?state.currentChannel:state.currentPrivateChat;clearUnread(currentId)}});function init(){state.originalFavicon=createDefaultFavicon();favicon.href=state.originalFavicon;const n=prompt('Enter your username:','User')||'User';state.username=n;usernameDisplay.textContent=n;userAvatar.textContent=n.charAt(0).toUpperCase();connectWebSocket()}function connectWebSocket(){try{state.ws=new WebSocket(WS_URL)}catch(e){setTimeout(connectWebSocket,3000);return}state.ws.onopen=()=>{state.connected=true;connectionStatus.classList.add('connected');sendBtn.disabled=false;send({type:'join',username:state.username});send({type:'getHistory',channel:state.currentChannel})};state.ws.onmessage=e=>{try{handleServerMessage(JSON.parse(e.data))}catch(er){}};state.ws.onclose=()=>{state.connected=false;connectionStatus.classList.remove('connected');sendBtn.disabled=true;setTimeout(connectWebSocket,3000)};state.ws.onerror=e=>{}}function handleServerMessage(d){switch(d.type){case'message':addMessageToChannel(d.message);break;case'history':loadHistory(d.channel,d.messages);break;case'userList':updateUserList(d.users);break;case'typing':handleTypingIndicator(d);break;case'privateChatRequest':showPrivateChatRequest(d.from);break;case'privateChatAccepted':handlePrivateChatAccepted(d.chatId,d.with);break;case'privateChatRejected':alert(`${d.by} declined`);break;case'privateMessage':addPrivateMessage(d.message);break;case'privateHistory':loadPrivateHistory(d.chatId,d.messages);break}}function send(d){if(state.ws&&state.ws.readyState===WebSocket.OPEN)state.ws.send(JSON.stringify(d))}function showPrivateChatRequest(from){const n=document.createElement('div');n.className='notification';n.innerHTML=`<div class="notification-header">Private Chat Request</div><div class="notification-body">${from} wants to chat</div><div class="notification-actions"><button class="notification-btn btn-accept">Accept</button><button class="notification-btn btn-decline">Decline</button></div>`;n.querySelector('.btn-accept').onclick=()=>{send({type:'privateChatResponse',from,accepted:true});n.remove()};n.querySelector('.btn-decline').onclick=()=>{send({type:'privateChatResponse',from,accepted:false});n.remove()};notifications.appendChild(n)}function handlePrivateChatAccepted(chatId,withUser){state.privateChats[chatId]=withUser;addDMToList(chatId,withUser);switchToPrivateChat(chatId,withUser)}function addDMToList(chatId,username){if(document.querySelector(`[data-chat-id="${chatId}"]`))return;const d=document.createElement('div');d.className='channel private';d.dataset.chatId=chatId;d.innerHTML=`<span class="channel-name">${username}</span><div class="channel-right"><button class="close-dm">×</button></div>`;d.querySelector('.close-dm').onclick=e=>{e.stopPropagation();d.remove();delete state.privateChats[chatId];delete state.privateMessages[chatId];if(state.unreadCounts[chatId]){state.totalUnread-=state.unreadCounts[chatId];delete state.unreadCounts[chatId];updateTitle();updateFavicon(state.totalUnread>0)}if(state.currentPrivateChat===chatId)switchChannel('general')};d.onclick=()=>switchToPrivateChat(chatId,username);dmList.appendChild(d)}function switchToPrivateChat(chatId,username){const oldId=state.currentChatType==='channel'?state.currentChannel:state.currentPrivateChat;if(oldId)clearUnread(oldId);state.currentChatType='private';state.currentPrivateChat=chatId;state.currentChannel=username;currentChannelEl.textContent=username;currentChannelEl.classList.add('private');messageInput.placeholder=`Message @${username}`;document.querySelectorAll('.channel').forEach(c=>c.classList.remove('active'));const dm=document.querySelector(`[data-chat-id="${chatId}"]`);if(dm)dm.classList.add('active');if(!state.privateMessages[chatId])send({type:'getPrivateHistory',chatId});else renderMessages();state.typingUsers={};updateTypingIndicator();clearUnread(chatId)}function requestPrivateChat(username){if(username===state.username)return;send({type:'privateChatRequest',targetUsername:username})}async function compressImage(file){return new Promise(resolve=>{const reader=new FileReader();reader.onload=e=>{const img=new Image();img.onload=()=>{const canvas=document.createElement('canvas');let width=img.width,height=img.height;const maxSize=800;if(width>height){if(width>maxSize){height*=maxSize/width;width=maxSize}}else{if(height>maxSize){width*=maxSize/height;height=maxSize}}canvas.width=width;canvas.height=height;const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0,width,height);canvas.toBlob(blob=>{const cr=new FileReader();cr.onloadend=()=>resolve({data:cr.result,name:file.name});cr.readAsDataURL(blob)},'image/jpeg',0.7)};img.src=e.target.result};reader.readAsDataURL(file)})}attachBtn.onclick=()=>fileInput.click();fileInput.onchange=async e=>{const file=e.target.files[0];if(!file)return;const compressed=await compressImage(file);state.selectedImage=compressed;imagePreviewContainer.innerHTML=`<div class="image-preview"><img src="${compressed.data}" class="preview-image"><button class="remove-preview">×</button></div>`;imagePreviewContainer.querySelector('.remove-preview').onclick=()=>{state.selectedImage=null;imagePreviewContainer.innerHTML='';fileInput.value=''}};function addMessage(){const text=messageInput.value.trim();if(!state.connected)return;if(state.selectedImage){if(state.currentChatType==='private'){send({type:'privateImageMessage',chatId:state.currentPrivateChat,imageData:state.selectedImage.data,fileName:state.selectedImage.name,targetUsername:state.privateChats[state.currentPrivateChat]})}else{send({type:'imageMessage',channel:state.currentChannel,imageData:state.selectedImage.data,fileName:state.selectedImage.name})}state.selectedImage=null;imagePreviewContainer.innerHTML='';fileInput.value=''}else if(text){if(state.currentChatType==='private'){send({type:'privateMessage',chatId:state.currentPrivateChat,text,targetUsername:state.privateChats[state.currentPrivateChat]})}else{send({type:'message',channel:state.currentChannel,text})}}messageInput.value='';stopTyping()}function addMessageToChannel(m){if(!state.messages[m.channel])state.messages[m.channel]=[];state.messages[m.channel].push(m);if(m.author!==state.username){incrementUnread(m.channel)}if(m.channel===state.currentChannel&&state.currentChatType==='channel')renderMessages()}function addPrivateMessage(m){if(!state.privateMessages[m.chatId])state.privateMessages[m.chatId]=[];state.privateMessages[m.chatId].push(m);if(m.author!==state.username){incrementUnread(m.chatId)}if(m.chatId===state.currentPrivateChat&&state.currentChatType==='private')renderMessages()}function loadHistory(c,m){state.messages[c]=m;if(c===state.currentChannel&&state.currentChatType==='channel')renderMessages()}function loadPrivateHistory(c,m){state.privateMessages[c]=m;if(c===state.currentPrivateChat&&state.currentChatType==='private')renderMessages()}function renderMessages(){let msgs=state.currentChatType==='private'?state.privateMessages[state.currentPrivateChat]||[]:state.messages[state.currentChannel]||[];messageArea.innerHTML='';msgs.forEach(m=>{const d=document.createElement('div');d.className='message';const av=document.createElement('div');av.className='message-avatar';av.textContent=m.author.charAt(0).toUpperCase();const cont=document.createElement('div');cont.className='message-content';const hdr=document.createElement('div');hdr.className='message-header';const auth=document.createElement('span');auth.className='message-author';auth.textContent=m.author;const ts=document.createElement('span');ts.className='message-timestamp';ts.textContent=formatTime(new Date(m.timestamp));hdr.appendChild(auth);hdr.appendChild(ts);cont.appendChild(hdr);if(m.isImage){const img=document.createElement('img');img.className='message-image';img.src=m.imageData;img.alt=m.fileName||'Image';img.onclick=()=>openImageModal(m.imageData);cont.appendChild(img)}else{const txt=document.createElement('div');txt.className='message-text';txt.textContent=m.text;cont.appendChild(txt)}d.appendChild(av);d.appendChild(cont);messageArea.appendChild(d)});messageArea.scrollTop=messageArea.scrollHeight}function openImageModal(src){modalImage.src=src;imageModal.classList.add('active')}function closeImageModal(){imageModal.classList.remove('active')}closeModalBtn.onclick=closeImageModal;imageModal.onclick=e=>{if(e.target===imageModal)closeImageModal()};function updateUserList(users){state.users=users;userList.innerHTML='';users.forEach(u=>{if(u===state.username)return;const el=document.createElement('div');el.className='user-list-item';el.innerHTML=`<span class="user-name">${u}</span><button class="dm-btn">DM</button>`;el.querySelector('.dm-btn').onclick=()=>requestPrivateChat(u);userList.appendChild(el)})}function handleTypingIndicator(d){if(state.currentChatType==='private'){if(d.isPrivate&&d.username===state.privateChats[state.currentPrivateChat]){d.isTyping?state.typingUsers[d.username]=true:delete state.typingUsers[d.username];updateTypingIndicator()}}else{if(d.channel===state.currentChannel&&!d.isPrivate){d.isTyping?state.typingUsers[d.username]=true:delete state.typingUsers[d.username];updateTypingIndicator()}}}function updateTypingIndicator(){const t=Object.keys(state.typingUsers);typingIndicator.textContent=t.length===0?'':t.length===1?`${t[0]} is typing...`:`${t.length} people are typing...`}function startTyping(){if(!state.connected)return;if(state.currentChatType==='private')send({type:'typing',channel:state.currentPrivateChat,isTyping:true,isPrivate:true,targetUsername:state.privateChats[state.currentPrivateChat]});else send({type:'typing',channel:state.currentChannel,isTyping:true});clearTimeout(typingTimeout);typingTimeout=setTimeout(stopTyping,3000)}function stopTyping(){if(!state.connected)return;if(state.currentChatType==='private')send({type:'typing',channel:state.currentPrivateChat,isTyping:false,isPrivate:true,targetUsername:state.privateChats[state.currentPrivateChat]});else send({type:'typing',channel:state.currentChannel,isTyping:false})}function formatTime(d){return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0')}function switchChannel(c){const oldId=state.currentChatType==='channel'?state.currentChannel:state.currentPrivateChat;if(oldId)clearUnread(oldId);state.currentChatType='channel';state.currentPrivateChat=null;state.currentChannel=c;currentChannelEl.textContent=c;currentChannelEl.classList.remove('private');messageInput.placeholder=`Message #${c}`;document.querySelectorAll('.channel').forEach(ch=>{ch.classList.remove('active');if(ch.dataset.channel===c)ch.classList.add('active')});if(!state.messages[c])send({type:'getHistory',channel:c});else renderMessages();state.typingUsers={};updateTypingIndicator();clearUnread(c)}sendBtn.onclick=e=>{e.preventDefault();addMessage()};messageInput.onkeypress=e=>{if(e.key==='Enter'){e.preventDefault();addMessage()}};messageInput.oninput=()=>{messageInput.value.length>0?startTyping():stopTyping()};channelList.onclick=e=>{const c=e.target.closest('.channel');if(c&&c.dataset.channel)switchChannel(c.dataset.channel)};init();
-    </script>
+  <div id="instructions">
+    <h2>THE BACKROOMS</h2>
+    <p><strong>WASD</strong> - Move</p>
+    <p><strong>Mouse</strong> - Look around</p>
+    <p><strong>Enter</strong> - Chat</p>
+    <p><br>Survive. Explore. Escape.</p>
+    <button onclick="startGame()">ENTER THE BACKROOMS</button>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
+  
+  <div id="ui">
+    <div id="health">HEALTH: <span id="healthValue">100</span></div>
+    <div>PLAYERS: <span id="playerCount">1</span></div>
+    <div>LEVEL: 0</div>
+  </div>
+
+  <div id="chat">
+    <div id="messages"></div>
+    <input type="text" id="chatInput" placeholder="Press Enter to chat..." style="display:none;">
+  </div>
+
+  <div id="deathScreen">
+    <div id="deathText">YOU DIED</div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script>
+    let scene, camera, renderer, socket;
+    let player, otherPlayers = {};
+    let entities = [];
+    let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+    let velocity = new THREE.Vector3();
+    let direction = new THREE.Vector3();
+    let health = 100;
+    let chatting = false;
+    let gameStarted = false;
+
+    function startGame() {
+      document.getElementById('instructions').style.display = 'none';
+      gameStarted = true;
+      document.body.requestPointerLock();
+      init();
+    }
+
+    function init() {
+      // Scene setup
+      scene = new THREE.Scene();
+      scene.fog = new THREE.Fog(0xd4c5a0, 1, 50);
+      
+      // Camera
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      camera.position.y = 1.6;
+      
+      // Renderer
+      renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas'), antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      
+      // Lights
+      const ambientLight = new THREE.AmbientLight(0xd4c5a0, 0.6);
+      scene.add(ambientLight);
+      
+      // Create backrooms environment
+      createBackrooms();
+      
+      // Socket connection
+      socket = io();
+      
+      socket.on('init', (data) => {
+        camera.position.set(data.players[data.id].x, 1.6, data.players[data.id].z);
+        
+        // Add other players
+        for (let id in data.players) {
+          if (id !== data.id) {
+            addOtherPlayer(data.players[id]);
+          }
+        }
+        
+        // Add entities
+        data.entities.forEach(e => addEntity(e));
+      });
+      
+      socket.on('playerJoined', (playerData) => {
+        addOtherPlayer(playerData);
+        updatePlayerCount();
+      });
+      
+      socket.on('playerMoved', (data) => {
+        if (otherPlayers[data.id]) {
+          otherPlayers[data.id].position.set(data.x, data.y, data.z);
+          otherPlayers[data.id].rotation.y = data.rotation;
+        }
+      });
+      
+      socket.on('playerLeft', (id) => {
+        if (otherPlayers[id]) {
+          scene.remove(otherPlayers[id]);
+          delete otherPlayers[id];
+          updatePlayerCount();
+        }
+      });
+      
+      socket.on('entitiesUpdate', (entitiesData) => {
+        entitiesData.forEach((e, i) => {
+          if (entities[i]) {
+            entities[i].position.set(e.x, e.y, e.z);
+          }
+        });
+      });
+      
+      socket.on('damage', (newHealth) => {
+        health = newHealth;
+        document.getElementById('healthValue').textContent = health;
+        flashDamage();
+      });
+      
+      socket.on('death', () => {
+        document.getElementById('deathScreen').classList.add('active');
+        setTimeout(() => {
+          location.reload();
+        }, 3000);
+      });
+      
+      socket.on('chat', (data) => {
+        addChatMessage(`Player: ${data.message}`);
+      });
+      
+      // Controls
+      document.addEventListener('keydown', onKeyDown);
+      document.addEventListener('keyup', onKeyUp);
+      document.addEventListener('mousemove', onMouseMove);
+      
+      // Chat controls
+      const chatInput = document.getElementById('chatInput');
+      chatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          if (chatInput.value.trim()) {
+            socket.emit('chat', chatInput.value);
+            chatInput.value = '';
+          }
+          chatInput.style.display = 'none';
+          chatting = false;
+        } else if (e.key === 'Escape') {
+          chatInput.style.display = 'none';
+          chatInput.value = '';
+          chatting = false;
+        }
+      });
+      
+      animate();
+    }
+
+    function createBackrooms() {
+      // Floor
+      const floorGeometry = new THREE.PlaneGeometry(200, 200);
+      const floorMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0xd4c5a0,
+        roughness: 0.8 
+      });
+      const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+      floor.rotation.x = -Math.PI / 2;
+      floor.receiveShadow = true;
+      scene.add(floor);
+      
+      // Ceiling
+      const ceiling = new THREE.Mesh(floorGeometry, floorMaterial);
+      ceiling.rotation.x = Math.PI / 2;
+      ceiling.position.y = 3;
+      scene.add(ceiling);
+      
+      // Walls
+      const wallMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0xe6d5a8,
+        roughness: 0.9 
+      });
+      
+      for (let i = 0; i < 30; i++) {
+        const wallGeometry = new THREE.BoxGeometry(
+          Math.random() > 0.5 ? 0.2 : Math.random() * 10 + 5,
+          3,
+          Math.random() > 0.5 ? Math.random() * 10 + 5 : 0.2
+        );
+        const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+        wall.position.set(
+          (Math.random() - 0.5) * 80,
+          1.5,
+          (Math.random() - 0.5) * 80
+        );
+        wall.castShadow = true;
+        wall.receiveShadow = true;
+        scene.add(wall);
+      }
+      
+      // Fluorescent lights
+      for (let i = 0; i < 20; i++) {
+        const light = new THREE.PointLight(0xffffe0, 0.5, 20);
+        light.position.set(
+          (Math.random() - 0.5) * 80,
+          2.8,
+          (Math.random() - 0.5) * 80
+        );
+        scene.add(light);
+        
+        // Light box
+        const lightBox = new THREE.Mesh(
+          new THREE.BoxGeometry(2, 0.1, 0.5),
+          new THREE.MeshBasicMaterial({ color: 0xffffcc })
+        );
+        lightBox.position.copy(light.position);
+        scene.add(lightBox);
+      }
+    }
+
+    function addOtherPlayer(playerData) {
+      const geometry = new THREE.CapsuleGeometry(0.3, 1, 4, 8);
+      const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+      const playerMesh = new THREE.Mesh(geometry, material);
+      playerMesh.position.set(playerData.x, playerData.y, playerData.z);
+      scene.add(playerMesh);
+      otherPlayers[playerData.id] = playerMesh;
+    }
+
+    function addEntity(entityData) {
+      const geometry = new THREE.BoxGeometry(0.6, 2, 0.6);
+      const material = new THREE.MeshStandardMaterial({ 
+        color: 0x000000,
+        emissive: 0xff0000,
+        emissiveIntensity: 0.5
+      });
+      const entityMesh = new THREE.Mesh(geometry, material);
+      entityMesh.position.set(entityData.x, entityData.y, entityData.z);
+      scene.add(entityMesh);
+      entities.push(entityMesh);
+    }
+
+    function onKeyDown(e) {
+      if (chatting) return;
+      
+      if (e.key === 'Enter') {
+        chatting = true;
+        document.getElementById('chatInput').style.display = 'block';
+        document.getElementById('chatInput').focus();
+        return;
+      }
+      
+      switch(e.key) {
+        case 'w': moveForward = true; break;
+        case 's': moveBackward = true; break;
+        case 'a': moveLeft = true; break;
+        case 'd': moveRight = true; break;
+      }
+    }
+
+    function onKeyUp(e) {
+      switch(e.key) {
+        case 'w': moveForward = false; break;
+        case 's': moveBackward = false; break;
+        case 'a': moveLeft = false; break;
+        case 'd': moveRight = false; break;
+      }
+    }
+
+    function onMouseMove(e) {
+      if (!gameStarted || chatting) return;
+      
+      const movementX = e.movementX || 0;
+      const movementY = e.movementY || 0;
+      
+      camera.rotation.y -= movementX * 0.002;
+      camera.rotation.x -= movementY * 0.002;
+      camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x));
+    }
+
+    function updatePlayerCount() {
+      document.getElementById('playerCount').textContent = Object.keys(otherPlayers).length + 1;
+    }
+
+    function addChatMessage(msg) {
+      const messages = document.getElementById('messages');
+      const msgEl = document.createElement('div');
+      msgEl.textContent = msg;
+      messages.appendChild(msgEl);
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function flashDamage() {
+      document.body.style.background = '#f00';
+      setTimeout(() => { document.body.style.background = '#000'; }, 100);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      
+      if (!chatting) {
+        // Movement
+        direction.set(0, 0, 0);
+        if (moveForward) direction.z -= 1;
+        if (moveBackward) direction.z += 1;
+        if (moveLeft) direction.x -= 1;
+        if (moveRight) direction.x += 1;
+        direction.normalize();
+        
+        velocity.x = direction.x * 0.1;
+        velocity.z = direction.z * 0.1;
+        
+        const forward = new THREE.Vector3(0, 0, -1);
+        forward.applyQuaternion(camera.quaternion);
+        forward.y = 0;
+        forward.normalize();
+        
+        const right = new THREE.Vector3(1, 0, 0);
+        right.applyQuaternion(camera.quaternion);
+        right.y = 0;
+        right.normalize();
+        
+        camera.position.add(forward.multiplyScalar(velocity.z));
+        camera.position.add(right.multiplyScalar(velocity.x));
+        
+        // Send position to server
+        if (socket && (velocity.x !== 0 || velocity.z !== 0)) {
+          socket.emit('move', {
+            x: camera.position.x,
+            y: camera.position.y,
+            z: camera.position.z,
+            rotation: camera.rotation.y
+          });
+        }
+      }
+      
+      renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
 </body>
 </html>
