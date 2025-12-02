@@ -1,17 +1,20 @@
 {
   "name": "backrooms-multiplayer",
   "version": "1.0.0",
-  "description": "Multiplayer Backrooms survival game",
+  "description": "The Backrooms - Multiplayer Horror Game",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js"
   },
+  "keywords": ["backrooms", "multiplayer", "game", "horror", "three.js"],
+  "author": "",
+  "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
     "socket.io": "^4.6.1"
   },
-  "engines": {
-    "node": ">=14.0.0"
-  },
-  "license": "MIT"
+  "devDependencies": {
+    "nodemon": "^2.0.22"
+  }
 }
