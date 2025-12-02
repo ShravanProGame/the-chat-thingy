@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Backrooms Multiplayer</title>
+  <title>The Backrooms - Multiplayer</title>
   <style>
     * {
       margin: 0;
@@ -28,7 +28,7 @@
       text-shadow: 2px 2px 4px #000;
       z-index: 100;
       font-size: 16px;
-      background: rgba(0,0,0,0.7);
+      background: rgba(0,0,0,0.8);
       padding: 15px;
       border: 2px solid #ff0;
     }
@@ -36,6 +36,16 @@
       color: #f00;
       font-size: 18px;
       margin-bottom: 5px;
+    }
+    #stamina {
+      color: #0ff;
+      font-size: 16px;
+      margin-bottom: 5px;
+    }
+    #flashlight {
+      color: #ff0;
+      font-size: 14px;
+      margin-top: 5px;
     }
     #chat {
       position: fixed;
@@ -45,7 +55,7 @@
       z-index: 100;
     }
     #messages {
-      background: rgba(0, 0, 0, 0.8);
+      background: rgba(0, 0, 0, 0.9);
       color: #0f0;
       padding: 10px;
       height: 150px;
@@ -133,6 +143,11 @@
       font-size: 48px;
       margin-bottom: 30px;
       text-shadow: 3px 3px 6px #000;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
     }
     #instructions p {
       font-size: 18px;
@@ -159,12 +174,28 @@
       position: fixed;
       top: 20px;
       right: 20px;
-      background: rgba(0,0,0,0.7);
+      background: rgba(0,0,0,0.8);
       padding: 15px;
       border: 2px solid #0ff;
       color: #0ff;
       z-index: 100;
       font-size: 14px;
+    }
+    #connectionStatus {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.9);
+      color: #0ff;
+      padding: 30px;
+      border: 2px solid #0ff;
+      font-size: 20px;
+      z-index: 300;
+      display: none;
+    }
+    #connectionStatus.active {
+      display: block;
     }
   </style>
 </head>
@@ -172,26 +203,38 @@
   <div id="instructions">
     <h1>⚠ THE BACKROOMS ⚠</h1>
     <p><strong>WASD</strong> - Move around</p>
+    <p><strong>SHIFT</strong> - Sprint</p>
+    <p><strong>SPACE</strong> - Jump</p>
     <p><strong>MOUSE</strong> - Look around</p>
+    <p><strong>F</strong> - Toggle flashlight</p>
     <p><strong>T</strong> - Open chat</p>
     <p style="margin-top: 20px; color: #f00;">Avoid the red entities. They will hunt you.</p>
-    <p style="color: #0f0;">Share this URL with friends to play together!</p>
+    <p style="color: #0f0;">Multiplayer enabled! See other players in green!</p>
     <button id="startBtn">ENTER THE BACKROOMS</button>
+  </div>
+
+  <div id="connectionStatus">
+    <div>🔌 Connecting to server...</div>
   </div>
 
   <canvas id="gameCanvas"></canvas>
   
   <div id="ui">
     <div id="health">❤ HEALTH: <span id="healthValue">100</span></div>
-    <div>👥 PLAYERS: <span id="playerCount">1</span></div>
+    <div id="stamina">🔋 STAMINA: <span id="staminaValue">100</span></div>
+    <div>👥 PLAYERS: <span id="playerCount">0</span></div>
     <div>📍 LEVEL: 0</div>
+    <div id="flashlight">🔦 <span id="flashlightStatus">ON</span></div>
   </div>
 
   <div id="controls">
     <div>WASD - Move</div>
+    <div>SHIFT - Sprint</div>
+    <div>SPACE - Jump</div>
     <div>MOUSE - Look</div>
+    <div>F - Flashlight</div>
     <div>T - Chat</div>
-    <div>CLICK - Lock Mouse</div>
+    <div style="margin-top: 10px; color: #ff0;">CLICK - Lock Mouse</div>
   </div>
 
   <div id="chat">
@@ -209,141 +252,163 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
-    let scene, camera, renderer, socket;
-    let otherPlayers = {};
-    let entities = [];
-    let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
-    let health = 100;
-    let chatting = false;
-    let gameStarted = false;
-    let myPlayerId = null;
-    let yaw = 0;
-    let pitch = 0;
+    var scene, camera, renderer, socket;
+    var otherPlayers = {};
+    var entities = [];
+    var walls = [];
+    var moveForward = false;
+    var moveBackward = false;
+    var moveLeft = false;
+    var moveRight = false;
+    var health = 100;
+    var stamina = 100;
+    var sprinting = false;
+    var chatting = false;
+    var gameStarted = false;
+    var myPlayerId = null;
+    var yaw = 0;
+    var pitch = 0;
+    var velocity = new THREE.Vector3();
+    var canJump = false;
+    var flashlightOn = true;
+    var flashlight;
+    var lastMoveUpdate = 0;
 
-    // Start button
-    document.getElementById('startBtn').addEventListener('click', () => {
+    document.getElementById('startBtn').addEventListener('click', function() {
       document.getElementById('instructions').style.display = 'none';
-      gameStarted = true;
+      document.getElementById('connectionStatus').classList.add('active');
       init();
-      addChatMessage('🎮 Game started! Press T to chat. Click to lock mouse.');
     });
 
-    // Respawn button
-    document.getElementById('respawnBtn').addEventListener('click', () => {
+    document.getElementById('respawnBtn').addEventListener('click', function() {
       location.reload();
     });
 
     function init() {
       console.log('🎮 Starting game...');
       
-      // Scene
       scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x1a1a1a);
-      scene.fog = new THREE.Fog(0x1a1a1a, 10, 60);
+      scene.background = new THREE.Color(0x0a0a0a);
+      scene.fog = new THREE.Fog(0x0a0a0a, 1, 30);
       
-      // Camera
       camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
       camera.position.set(0, 1.6, 5);
       
-      // Renderer
-      const canvas = document.getElementById('gameCanvas');
+      var canvas = document.getElementById('gameCanvas');
       renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       
-      // Lights
-      const ambientLight = new THREE.AmbientLight(0xd4c5a0, 0.5);
+      var ambientLight = new THREE.AmbientLight(0x4a3f2f, 0.15);
       scene.add(ambientLight);
       
-      // Build world
+      flashlight = new THREE.SpotLight(0xffffee, 1.5, 25, Math.PI / 6, 0.5);
+      flashlight.position.copy(camera.position);
+      flashlight.target.position.set(0, 0, -1);
+      flashlight.castShadow = true;
+      flashlight.shadow.mapSize.width = 1024;
+      flashlight.shadow.mapSize.height = 1024;
+      scene.add(flashlight);
+      scene.add(flashlight.target);
+      
       createBackrooms();
       
-      // Connect to server
       console.log('🌐 Connecting to server...');
       socket = io();
       
-      socket.on('connect', () => {
+      socket.on('connect', function() {
         console.log('✅ Connected!');
+        document.getElementById('connectionStatus').classList.remove('active');
+        gameStarted = true;
         addChatMessage('✅ Connected to server!');
+        addChatMessage('💡 Press F to toggle flashlight');
+        addChatMessage('🏃 Hold SHIFT to sprint');
+        addChatMessage('⬆️ Press SPACE to jump');
       });
       
-      socket.on('init', (data) => {
+      socket.on('init', function(data) {
         console.log('📦 Got init data:', data);
         myPlayerId = data.id;
         
-        for (let id in data.players) {
+        for (var id in data.players) {
           if (id !== data.id) {
             addOtherPlayer(data.players[id]);
           }
         }
         
-        data.entities.forEach(e => addEntity(e));
+        data.entities.forEach(function(e) {
+          addEntity(e);
+        });
         updatePlayerCount();
       });
       
-      socket.on('playerJoined', (playerData) => {
+      socket.on('playerJoined', function(playerData) {
         addOtherPlayer(playerData);
         updatePlayerCount();
-        addChatMessage('👤 Player joined');
+        addChatMessage('👤 Player joined the backrooms...');
       });
       
-      socket.on('playerMoved', (data) => {
+      socket.on('playerMoved', function(data) {
         if (otherPlayers[data.id]) {
           otherPlayers[data.id].mesh.position.set(data.x, data.y, data.z);
           otherPlayers[data.id].mesh.rotation.y = data.rotation;
         }
       });
       
-      socket.on('playerLeft', (id) => {
+      socket.on('playerLeft', function(id) {
         if (otherPlayers[id]) {
           scene.remove(otherPlayers[id].mesh);
           delete otherPlayers[id];
           updatePlayerCount();
-          addChatMessage('👋 Player left');
+          addChatMessage('👋 Player left the backrooms...');
         }
       });
       
-      socket.on('entitiesUpdate', (entitiesData) => {
-        entitiesData.forEach((e, i) => {
+      socket.on('entitiesUpdate', function(entitiesData) {
+        entitiesData.forEach(function(e, i) {
           if (entities[i]) {
             entities[i].position.set(e.x, e.y, e.z);
           }
         });
       });
       
-      socket.on('damage', (newHealth) => {
+      socket.on('damage', function(newHealth) {
         health = newHealth;
         document.getElementById('healthValue').textContent = health;
         flashDamage();
       });
       
-      socket.on('death', () => {
+      socket.on('death', function() {
         document.getElementById('deathScreen').classList.add('active');
       });
       
-      socket.on('chatMessage', (data) => {
-        const isMe = data.id === myPlayerId;
-        addChatMessage(`${isMe ? 'You' : 'Player'}: ${data.message}`);
+      socket.on('chatMessage', function(data) {
+        var isMe = data.id === myPlayerId;
+        addChatMessage((isMe ? 'You' : data.username) + ': ' + data.message);
       });
       
-      // Input handlers
+      socket.on('disconnect', function() {
+        addChatMessage('❌ Disconnected from server');
+        document.getElementById('connectionStatus').classList.add('active');
+        document.getElementById('connectionStatus').innerHTML = '<div>❌ Disconnected. Refresh to reconnect.</div>';
+      });
+      
       document.addEventListener('keydown', handleKeyDown);
       document.addEventListener('keyup', handleKeyUp);
       document.addEventListener('mousemove', handleMouseMove);
       
-      // Click to lock mouse
-      canvas.addEventListener('click', () => {
+      canvas.addEventListener('click', function() {
         if (gameStarted && !chatting) {
           canvas.requestPointerLock();
         }
       });
       
-      // Chat input
-      const chatInput = document.getElementById('chatInput');
-      chatInput.addEventListener('keydown', (e) => {
+      var chatInput = document.getElementById('chatInput');
+      chatInput.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') {
           e.preventDefault();
-          const msg = chatInput.value.trim();
+          var msg = chatInput.value.trim();
           if (msg && socket) {
             socket.emit('chat', msg);
             chatInput.value = '';
@@ -361,7 +426,7 @@
     function handleKeyDown(e) {
       if (chatting) return;
       
-      const key = e.key.toLowerCase();
+      var key = e.key.toLowerCase();
       
       if (key === 't') {
         e.preventDefault();
@@ -369,18 +434,32 @@
         return;
       }
       
+      if (key === 'f') {
+        flashlightOn = !flashlightOn;
+        flashlight.intensity = flashlightOn ? 1.5 : 0;
+        document.getElementById('flashlightStatus').textContent = flashlightOn ? 'ON' : 'OFF';
+        addChatMessage(flashlightOn ? '🔦 Flashlight ON' : '🔦 Flashlight OFF');
+        if (socket) socket.emit('flashlight', flashlightOn);
+      }
+      
       if (key === 'w') moveForward = true;
       if (key === 's') moveBackward = true;
       if (key === 'a') moveLeft = true;
       if (key === 'd') moveRight = true;
+      if (key === 'shift') sprinting = true;
+      if (key === ' ' && canJump) {
+        velocity.y = 5;
+        canJump = false;
+      }
     }
 
     function handleKeyUp(e) {
-      const key = e.key.toLowerCase();
+      var key = e.key.toLowerCase();
       if (key === 'w') moveForward = false;
       if (key === 's') moveBackward = false;
       if (key === 'a') moveLeft = false;
       if (key === 'd') moveRight = false;
+      if (key === 'shift') sprinting = false;
     }
 
     function handleMouseMove(e) {
@@ -400,7 +479,6 @@
       document.exitPointerLock();
       document.getElementById('chatInputContainer').classList.add('active');
       document.getElementById('chatInput').focus();
-      console.log('💬 Chat opened');
     }
 
     function closeChat() {
@@ -408,60 +486,67 @@
       document.getElementById('chatInputContainer').classList.remove('active');
       document.getElementById('chatInput').value = '';
       document.getElementById('gameCanvas').requestPointerLock();
-      console.log('💬 Chat closed');
     }
 
     function createBackrooms() {
-      // Floor
-      const floorGeometry = new THREE.PlaneGeometry(300, 300);
-      const floorMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0xc9b896,
-        roughness: 0.9
+      var floorGeometry = new THREE.PlaneGeometry(200, 200);
+      var floorMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0xd4c5a0,
+        roughness: 0.95
       });
-      const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+      var floor = new THREE.Mesh(floorGeometry, floorMaterial);
       floor.rotation.x = -Math.PI / 2;
       floor.receiveShadow = true;
       scene.add(floor);
       
-      // Ceiling
-      const ceiling = floor.clone();
+      var ceiling = floor.clone();
       ceiling.rotation.x = Math.PI / 2;
       ceiling.position.y = 3;
+      ceiling.material = new THREE.MeshStandardMaterial({ 
+        color: 0xe8dcc8,
+        roughness: 0.9
+      });
       scene.add(ceiling);
       
-      // Walls
-      const wallMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0xe6d5a8,
+      var wallMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0xf0e6d2,
         roughness: 0.9
       });
       
-      for (let x = -50; x < 50; x += 10) {
-        for (let z = -50; z < 50; z += 10) {
-          if (Math.random() > 0.3) {
-            const vertical = Math.random() > 0.5;
-            const wall = new THREE.Mesh(
-              new THREE.BoxGeometry(vertical ? 0.3 : 8, 3, vertical ? 8 : 0.3),
+      var cellSize = 6;
+      for (var x = -5; x < 5; x++) {
+        for (var z = -5; z < 5; z++) {
+          if (x === 0 && z === 0) continue;
+          
+          if (Math.random() > 0.4) {
+            var vertical = Math.random() > 0.5;
+            var wall = new THREE.Mesh(
+              new THREE.BoxGeometry(vertical ? 0.3 : cellSize, 3, vertical ? cellSize : 0.3),
               wallMaterial
             );
-            wall.position.set(x + Math.random() * 5, 1.5, z + Math.random() * 5);
+            wall.position.set(
+              x * cellSize + (Math.random() - 0.5) * 2,
+              1.5,
+              z * cellSize + (Math.random() - 0.5) * 2
+            );
             wall.castShadow = true;
             wall.receiveShadow = true;
             scene.add(wall);
+            walls.push(wall);
           }
         }
       }
       
-      // Lights
-      for (let x = -40; x < 40; x += 15) {
-        for (let z = -40; z < 40; z += 15) {
-          const light = new THREE.PointLight(0xffffcc, 1, 25);
-          light.position.set(x, 2.7, z);
+      for (var lx = -40; lx < 40; lx += 12) {
+        for (var lz = -40; lz < 40; lz += 12) {
+          var light = new THREE.PointLight(0xffffcc, 0.4, 15);
+          light.position.set(lx + Math.random() * 4, 2.8, lz + Math.random() * 4);
           light.castShadow = true;
           scene.add(light);
           
-          const lightBox = new THREE.Mesh(
-            new THREE.BoxGeometry(2.5, 0.1, 0.7),
-            new THREE.MeshBasicMaterial({ color: 0xffffdd })
+          var lightBox = new THREE.Mesh(
+            new THREE.BoxGeometry(2, 0.08, 0.5),
+            new THREE.MeshBasicMaterial({ color: 0xffffee })
           );
           lightBox.position.copy(light.position);
           scene.add(lightBox);
@@ -470,31 +555,41 @@
     }
 
     function addOtherPlayer(data) {
-      const mesh = new THREE.Mesh(
-        new THREE.CapsuleGeometry(0.4, 1.2, 4, 8),
+      var mesh = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.3, 0.3, 1.6, 8),
         new THREE.MeshStandardMaterial({ 
-          color: 0x00ff00,
-          emissive: 0x00ff00,
-          emissiveIntensity: 0.5
+          color: 0x00ff88,
+          emissive: 0x00ff88,
+          emissiveIntensity: 0.3
         })
       );
       mesh.position.set(data.x, data.y, data.z);
       mesh.castShadow = true;
       scene.add(mesh);
-      otherPlayers[data.id] = { mesh };
+      otherPlayers[data.id] = { mesh: mesh };
     }
 
     function addEntity(data) {
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(0.8, 2.5, 0.8),
+      var mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.6, 2, 0.6),
         new THREE.MeshStandardMaterial({ 
-          color: 0x000000,
+          color: 0x050505,
           emissive: 0xff0000,
-          emissiveIntensity: 1
+          emissiveIntensity: 0.8
         })
       );
       mesh.position.set(data.x, data.y, data.z);
       mesh.castShadow = true;
+      
+      var eyeGeometry = new THREE.SphereGeometry(0.08, 8, 8);
+      var eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+      var leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+      leftEye.position.set(-0.15, 0.5, 0.3);
+      mesh.add(leftEye);
+      var rightEye = leftEye.clone();
+      rightEye.position.set(0.15, 0.5, 0.3);
+      mesh.add(rightEye);
+      
       scene.add(mesh);
       entities.push(mesh);
     }
@@ -504,8 +599,8 @@
     }
 
     function addChatMessage(msg) {
-      const messages = document.getElementById('messages');
-      const div = document.createElement('div');
+      var messages = document.getElementById('messages');
+      var div = document.createElement('div');
       div.className = 'chatMsg';
       div.textContent = msg;
       messages.appendChild(div);
@@ -518,59 +613,103 @@
 
     function flashDamage() {
       document.body.style.background = '#f00';
-      setTimeout(() => { document.body.style.background = '#000'; }, 100);
+      setTimeout(function() { 
+        document.body.style.background = '#000'; 
+      }, 100);
     }
-
-    let lastSend = 0;
 
     function animate() {
       requestAnimationFrame(animate);
       
       if (!chatting && gameStarted) {
-        const speed = 0.15;
-        const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+        var delta = 0.016;
+        var speed = sprinting && stamina > 0 ? 0.12 : 0.08;
+        
+        if (sprinting && (moveForward || moveBackward || moveLeft || moveRight)) {
+          stamina = Math.max(0, stamina - 0.3);
+        } else {
+          stamina = Math.min(100, stamina + 0.15);
+        }
+        document.getElementById('staminaValue').textContent = Math.round(stamina);
+        
+        var forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
         forward.y = 0;
         forward.normalize();
         
-        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+        var right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
         right.y = 0;
         right.normalize();
         
-        let moved = false;
+        var moved = false;
+        var moveVector = new THREE.Vector3();
         
         if (moveForward) {
-          camera.position.add(forward.multiplyScalar(speed));
+          moveVector.add(forward.multiplyScalar(speed));
           moved = true;
         }
         if (moveBackward) {
-          camera.position.add(forward.multiplyScalar(-speed));
+          moveVector.add(forward.multiplyScalar(-speed));
           moved = true;
         }
         if (moveLeft) {
-          camera.position.add(right.multiplyScalar(-speed));
+          moveVector.add(right.multiplyScalar(-speed));
           moved = true;
         }
         if (moveRight) {
-          camera.position.add(right.multiplyScalar(speed));
+          moveVector.add(right.multiplyScalar(speed));
           moved = true;
         }
         
-        const now = Date.now();
-        if (socket && moved && now - lastSend > 50) {
+        velocity.y -= 15 * delta;
+        
+        var newPosition = camera.position.clone().add(moveVector);
+        newPosition.y += velocity.y * delta;
+        
+        if (newPosition.y < 1.6) {
+          newPosition.y = 1.6;
+          velocity.y = 0;
+          canJump = true;
+        }
+        
+        var canMove = true;
+        var playerBox = new THREE.Box3().setFromCenterAndSize(
+          newPosition,
+          new THREE.Vector3(0.6, 1.6, 0.6)
+        );
+        
+        for (var i = 0; i < walls.length; i++) {
+          var wallBox = new THREE.Box3().setFromObject(walls[i]);
+          if (playerBox.intersectsBox(wallBox)) {
+            canMove = false;
+            break;
+          }
+        }
+        
+        if (canMove) {
+          camera.position.copy(newPosition);
+        }
+        
+        var now = Date.now();
+        if (socket && moved && now - lastMoveUpdate > 50) {
           socket.emit('move', {
             x: camera.position.x,
             y: camera.position.y,
             z: camera.position.z,
             rotation: yaw
           });
-          lastSend = now;
+          lastMoveUpdate = now;
         }
       }
+      
+      flashlight.position.copy(camera.position);
+      var direction = new THREE.Vector3(0, 0, -1);
+      direction.applyQuaternion(camera.quaternion);
+      flashlight.target.position.copy(camera.position).add(direction);
       
       renderer.render(scene, camera);
     }
 
-    window.addEventListener('resize', () => {
+    window.addEventListener('resize', function() {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
