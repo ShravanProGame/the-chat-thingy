@@ -1,519 +1,227 @@
-// server.js
 const express = require('express');
 const http = require('http');
-const WebSocket = require('ws');
+const socketIO = require('socket.io');
 const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+const io = socketIO(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
 
-// Middleware
-app.use(express.json({ limit: '10mb' }));
+// Serve static files
 app.use(express.static('public'));
 
-// In-memory storage
-const channels = {
-    general: [],
-    random: [],
-    gaming: [],
-    memes: []
-};
+// Game state
+const players = {};
+const entities = [];
+const MAX_ENTITIES = 5;
 
-const users = new Map();
-const privateChats = new Map();
-const userSocketMap = new Map();
+// Initialize entities
+function initEntities() {
+  for (let i = 0; i < MAX_ENTITIES; i++) {
+    entities.push({
+      id: `entity_${i}`,
+      x: Math.random() * 40 - 20,
+      y: 1.25,
+      z: Math.random() * 40 - 20,
+      speed: 0.02 + Math.random() * 0.02,
+      waitTime: Math.random() * 3
+    });
+  }
+}
 
-// WebSocket connection handler
-wss.on('connection', (ws) => {
-    console.log('New client connected');
+initEntities();
+
+// Socket.IO connection handler
+io.on('connection', (socket) => {
+  console.log(`✅ Player connected: ${socket.id}`);
+  
+  // Initialize new player
+  players[socket.id] = {
+    id: socket.id,
+    x: Math.random() * 10 - 5,
+    y: 1.6,
+    z: Math.random() * 10 - 5,
+    rotation: 0,
+    health: 100,
+    username: `Player_${Math.random().toString(36).substr(2, 4)}`
+  };
+
+  // Send init data to new player
+  socket.emit('init', {
+    id: socket.id,
+    players: players,
+    entities: entities
+  });
+
+  // Notify others about new player
+  socket.broadcast.emit('playerJoined', players[socket.id]);
+
+  console.log(`👥 Total players: ${Object.keys(players).length}`);
+
+  // Handle player movement
+  socket.on('move', (data) => {
+    if (players[socket.id]) {
+      players[socket.id].x = data.x;
+      players[socket.id].y = data.y;
+      players[socket.id].z = data.z;
+      players[socket.id].rotation = data.rotation;
+
+      // Broadcast to other players
+      socket.broadcast.emit('playerMoved', {
+        id: socket.id,
+        x: data.x,
+        y: data.y,
+        z: data.z,
+        rotation: data.rotation
+      });
+    }
+  });
+
+  // Handle chat messages
+  socket.on('chat', (message) => {
+    if (players[socket.id]) {
+      console.log(`💬 ${players[socket.id].username}: ${message}`);
+      
+      io.emit('chatMessage', {
+        id: socket.id,
+        username: players[socket.id].username,
+        message: message,
+        timestamp: Date.now()
+      });
+    }
+  });
+
+  // Handle flashlight toggle
+  socket.on('flashlight', (isOn) => {
+    socket.broadcast.emit('playerFlashlight', {
+      id: socket.id,
+      isOn: isOn
+    });
+  });
+
+  // Handle player disconnect
+  socket.on('disconnect', () => {
+    console.log(`❌ Player disconnected: ${socket.id}`);
     
-    ws.send(JSON.stringify({
-        type: 'connected',
-        message: 'Connected to server'
-    }));
-    
-    ws.on('message', (data) => {
-        try {
-            console.log('Received message type');
-            const message = JSON.parse(data.toString());
-            handleMessage(ws, message);
-        } catch (error) {
-            console.error('Error parsing message:', error);
-            ws.send(JSON.stringify({
-                type: 'error',
-                message: 'Error parsing message'
-            }));
-        }
-    });
-
-    ws.on('close', () => {
-        const user = users.get(ws);
-        if (user) {
-            console.log(`User ${user.username} disconnected`);
-            userSocketMap.delete(user.username);
-            users.delete(ws);
-            broadcastUserList();
-        }
-    });
-
-    ws.on('error', (error) => {
-        console.error('WebSocket error:', error);
-    });
+    if (players[socket.id]) {
+      delete players[socket.id];
+      socket.broadcast.emit('playerLeft', socket.id);
+      console.log(`👥 Total players: ${Object.keys(players).length}`);
+    }
+  });
 });
 
-// Handle different message types
-function handleMessage(ws, message) {
-    console.log('Handling message type:', message.type);
-    
-    switch (message.type) {
-        case 'join':
-            handleJoin(ws, message);
-            break;
-        case 'message':
-            handleChatMessage(ws, message);
-            break;
-        case 'imageMessage':
-            handleImageMessage(ws, message);
-            break;
-        case 'getHistory':
-            handleGetHistory(ws, message);
-            break;
-        case 'typing':
-            handleTyping(ws, message);
-            break;
-        case 'privateChatRequest':
-            handlePrivateChatRequest(ws, message);
-            break;
-        case 'privateChatResponse':
-            handlePrivateChatResponse(ws, message);
-            break;
-        case 'privateMessage':
-            handlePrivateMessage(ws, message);
-            break;
-        case 'privateImageMessage':
-            handlePrivateImageMessage(ws, message);
-            break;
-        case 'getPrivateHistory':
-            handleGetPrivateHistory(ws, message);
-            break;
-        default:
-            console.log('Unknown message type:', message.type);
-    }
-}
+// Entity AI update loop
+function updateEntities() {
+  if (Object.keys(players).length === 0) return;
 
-// User joins
-function handleJoin(ws, message) {
-    const { username } = message;
-    console.log(`User joining: ${username}`);
-    
-    users.set(ws, {
-        username,
-        id: generateId()
-    });
-    
-    userSocketMap.set(username, ws);
+  entities.forEach(entity => {
+    entity.waitTime -= 0.016; // ~60fps
 
-    ws.send(JSON.stringify({
-        type: 'joined',
-        username,
-        channels: Object.keys(channels)
-    }));
+    if (entity.waitTime <= 0) {
+      // Find nearest player
+      let nearestPlayer = null;
+      let nearestDistance = Infinity;
 
-    broadcastUserList();
-    console.log(`User ${username} joined. Total users: ${users.size}`);
-}
+      for (let id in players) {
+        const player = players[id];
+        const dx = player.x - entity.x;
+        const dz = player.z - entity.z;
+        const distance = Math.sqrt(dx * dx + dz * dz);
 
-// Handle chat messages
-function handleChatMessage(ws, message) {
-    const user = users.get(ws);
-    if (!user) {
-        console.log('Message from unknown user, ignoring');
-        return;
-    }
-
-    const { channel, text } = message;
-    console.log(`Message from ${user.username} in #${channel}`);
-    
-    const chatMessage = {
-        id: generateId(),
-        author: user.username,
-        text,
-        channel,
-        timestamp: new Date().toISOString()
-    };
-
-    if (channels[channel]) {
-        channels[channel].push(chatMessage);
-        
-        if (channels[channel].length > 100) {
-            channels[channel].shift();
+        if (distance < nearestDistance) {
+          nearestDistance = distance;
+          nearestPlayer = player;
         }
-        
-        console.log(`Message stored. Channel ${channel} now has ${channels[channel].length} messages`);
-    }
+      }
 
-    broadcast({
-        type: 'message',
-        message: chatMessage
-    });
-}
+      if (nearestPlayer) {
+        // Move toward nearest player
+        const dx = nearestPlayer.x - entity.x;
+        const dz = nearestPlayer.z - entity.z;
+        const distance = Math.sqrt(dx * dx + dz * dz);
 
-// Handle image messages
-function handleImageMessage(ws, message) {
-    const user = users.get(ws);
-    if (!user) {
-        console.log('Image from unknown user, ignoring');
-        return;
-    }
-
-    const { channel, imageData, fileName } = message;
-    console.log(`Image from ${user.username} in #${channel}, size: ${imageData ? imageData.length : 0} bytes`);
-    
-    const imageMessage = {
-        id: generateId(),
-        author: user.username,
-        imageData: imageData,
-        fileName: fileName,
-        channel: channel,
-        timestamp: new Date().toISOString(),
-        isImage: true
-    };
-
-    if (channels[channel]) {
-        channels[channel].push(imageMessage);
-        
-        if (channels[channel].length > 100) {
-            channels[channel].shift();
-        }
-        
-        console.log(`Image stored. Channel ${channel} now has ${channels[channel].length} messages`);
-    } else {
-        console.log(`Channel ${channel} not found`);
-    }
-
-    const broadcastData = {
-        type: 'message',
-        message: imageMessage
-    };
-    
-    console.log('Broadcasting image message to all clients');
-    broadcast(broadcastData);
-}
-
-// Handle private image messages
-function handlePrivateImageMessage(ws, message) {
-    const sender = users.get(ws);
-    if (!sender) return;
-
-    const { chatId, imageData, fileName, targetUsername } = message;
-    
-    const imageMessage = {
-        id: generateId(),
-        author: sender.username,
-        imageData,
-        fileName,
-        chatId,
-        timestamp: new Date().toISOString(),
-        isImage: true
-    };
-
-    if (!privateChats.has(chatId)) {
-        privateChats.set(chatId, []);
-    }
-    
-    const chatMessages = privateChats.get(chatId);
-    chatMessages.push(imageMessage);
-
-    if (chatMessages.length > 100) {
-        chatMessages.shift();
-    }
-
-    console.log(`Private image from ${sender.username} in ${chatId}`);
-
-    const targetWs = userSocketMap.get(targetUsername);
-    
-    const messageData = {
-        type: 'privateMessage',
-        message: imageMessage
-    };
-
-    ws.send(JSON.stringify(messageData));
-
-    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
-        targetWs.send(JSON.stringify(messageData));
-    }
-}
-
-// Handle private chat request
-function handlePrivateChatRequest(ws, message) {
-    const sender = users.get(ws);
-    if (!sender) return;
-
-    const { targetUsername } = message;
-    const targetWs = userSocketMap.get(targetUsername);
-
-    if (!targetWs) {
-        ws.send(JSON.stringify({
-            type: 'error',
-            message: 'User not found or offline'
-        }));
-        return;
-    }
-
-    console.log(`Private chat request from ${sender.username} to ${targetUsername}`);
-
-    targetWs.send(JSON.stringify({
-        type: 'privateChatRequest',
-        from: sender.username,
-        requestId: generateId()
-    }));
-}
-
-// Handle private chat response
-function handlePrivateChatResponse(ws, message) {
-    const responder = users.get(ws);
-    if (!responder) return;
-
-    const { accepted, from } = message;
-    const requesterWs = userSocketMap.get(from);
-
-    if (!requesterWs) {
-        ws.send(JSON.stringify({
-            type: 'error',
-            message: 'User no longer online'
-        }));
-        return;
-    }
-
-    if (accepted) {
-        const users = [from, responder.username].sort();
-        const chatId = `private_${users[0]}_${users[1]}`;
-
-        console.log(`Private chat accepted: ${chatId}`);
-
-        if (!privateChats.has(chatId)) {
-            privateChats.set(chatId, []);
+        if (distance > 0) {
+          entity.x += (dx / distance) * entity.speed;
+          entity.z += (dz / distance) * entity.speed;
         }
 
-        const chatData = {
-            type: 'privateChatAccepted',
-            chatId: chatId,
-            with: responder.username
-        };
+        // Check collision with players
+        for (let id in players) {
+          const player = players[id];
+          const dx = player.x - entity.x;
+          const dz = player.z - entity.z;
+          const dist = Math.sqrt(dx * dx + dz * dz);
 
-        requesterWs.send(JSON.stringify(chatData));
+          if (dist < 1.5 && player.health > 0) {
+            player.health = Math.max(0, player.health - 1);
+            
+            io.to(id).emit('damage', player.health);
 
-        ws.send(JSON.stringify({
-            type: 'privateChatAccepted',
-            chatId: chatId,
-            with: from
-        }));
-    } else {
-        requesterWs.send(JSON.stringify({
-            type: 'privateChatRejected',
-            by: responder.username
-        }));
-    }
-}
+            if (player.health <= 0) {
+              io.to(id).emit('death');
+              console.log(`💀 Player ${id} died`);
+            }
 
-// Handle private message
-function handlePrivateMessage(ws, message) {
-    const sender = users.get(ws);
-    if (!sender) return;
-
-    const { chatId, text, targetUsername } = message;
-    
-    const privateMessage = {
-        id: generateId(),
-        author: sender.username,
-        text,
-        chatId,
-        timestamp: new Date().toISOString()
-    };
-
-    if (!privateChats.has(chatId)) {
-        privateChats.set(chatId, []);
-    }
-    
-    const chatMessages = privateChats.get(chatId);
-    chatMessages.push(privateMessage);
-
-    if (chatMessages.length > 100) {
-        chatMessages.shift();
-    }
-
-    console.log(`Private message from ${sender.username} in ${chatId}`);
-
-    const targetWs = userSocketMap.get(targetUsername);
-    
-    const messageData = {
-        type: 'privateMessage',
-        message: privateMessage
-    };
-
-    ws.send(JSON.stringify(messageData));
-
-    if (targetWs && targetWs.readyState === WebSocket.OPEN) {
-        targetWs.send(JSON.stringify(messageData));
-    }
-}
-
-// Get private chat history
-function handleGetPrivateHistory(ws, message) {
-    const { chatId } = message;
-    console.log(`Private history requested for: ${chatId}`);
-    
-    const messages = privateChats.get(chatId) || [];
-    
-    ws.send(JSON.stringify({
-        type: 'privateHistory',
-        chatId,
-        messages
-    }));
-}
-
-// Get channel history
-function handleGetHistory(ws, message) {
-    const { channel } = message;
-    console.log(`History requested for channel: ${channel}`);
-    
-    if (channels[channel]) {
-        ws.send(JSON.stringify({
-            type: 'history',
-            channel,
-            messages: channels[channel]
-        }));
-        console.log(`Sent ${channels[channel].length} messages for #${channel}`);
-    } else {
-        ws.send(JSON.stringify({
-            type: 'history',
-            channel,
-            messages: []
-        }));
-    }
-}
-
-// Handle typing indicator
-function handleTyping(ws, message) {
-    const user = users.get(ws);
-    if (!user) return;
-
-    const { channel, isTyping, isPrivate, targetUsername } = message;
-    
-    if (isPrivate && targetUsername) {
-        const targetWs = userSocketMap.get(targetUsername);
-        if (targetWs && targetWs.readyState === WebSocket.OPEN) {
-            targetWs.send(JSON.stringify({
-                type: 'typing',
-                username: user.username,
-                channel,
-                isTyping,
-                isPrivate: true
-            }));
+            entity.waitTime = 1; // Cooldown after attack
+            break;
+          }
         }
-    } else {
-        broadcast({
-            type: 'typing',
-            username: user.username,
-            channel,
-            isTyping
-        }, ws);
+      }
     }
+  });
+
+  // Broadcast entity positions
+  io.emit('entitiesUpdate', entities);
 }
 
-// Broadcast user list
-function broadcastUserList() {
-    const userList = Array.from(users.values()).map(u => u.username);
-    
-    console.log('Broadcasting user list:', userList);
-    
-    broadcast({
-        type: 'userList',
-        users: userList
-    });
-}
+// Start entity update loop (60 FPS)
+setInterval(updateEntities, 16);
 
-// Broadcast to all clients
-function broadcast(message, excludeWs = null) {
-    const data = JSON.stringify(message);
-    let sentCount = 0;
-    
-    wss.clients.forEach((client) => {
-        if (client !== excludeWs && client.readyState === WebSocket.OPEN) {
-            client.send(data);
-            sentCount++;
-        }
-    });
-    
-    console.log(`Broadcast sent to ${sentCount} clients`);
-}
-
-// Generate unique ID
-function generateId() {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
-}
-
-// REST API endpoints
-app.get('/api/channels', (req, res) => {
-    res.json({
-        channels: Object.keys(channels)
-    });
-});
-
-app.get('/api/channels/:channel/messages', (req, res) => {
-    const { channel } = req.params;
-    const limit = parseInt(req.query.limit) || 50;
-    
-    if (channels[channel]) {
-        const messages = channels[channel].slice(-limit);
-        res.json({ messages });
-    } else {
-        res.status(404).json({ error: 'Channel not found' });
-    }
-});
-
-app.post('/api/channels', (req, res) => {
-    const { name } = req.body;
-    
-    if (!name || channels[name]) {
-        return res.status(400).json({ error: 'Invalid or duplicate channel name' });
-    }
-    
-    channels[name] = [];
-    
-    broadcast({
-        type: 'channelCreated',
-        channel: name
-    });
-    
-    res.json({ success: true, channel: name });
-});
-
-// Health check
+// Health check endpoint
 app.get('/health', (req, res) => {
-    res.json({ 
-        status: 'ok',
-        users: users.size,
-        channels: Object.keys(channels).length,
-        privateChats: privateChats.size
-    });
+  res.json({
+    status: 'ok',
+    players: Object.keys(players).length,
+    entities: entities.length,
+    uptime: process.uptime()
+  });
 });
 
 // Start server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`=================================`);
-    console.log(`Server running on port ${PORT}`);
-    console.log(`WebSocket server is ready`);
-    console.log(`Open http://localhost:${PORT} in your browser`);
-    console.log(`=================================`);
+  console.log(`
+╔════════════════════════════════════════╗
+║     🎮 BACKROOMS SERVER RUNNING 🎮     ║
+╠════════════════════════════════════════╣
+║  Port: ${PORT}                           ║
+║  Players: 0                            ║
+║  Entities: ${entities.length}                          ║
+║                                        ║
+║  Open: http://localhost:${PORT}        ║
+╚════════════════════════════════════════╝
+  `);
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
-    console.log('SIGTERM signal received: closing HTTP server');
-    server.close(() => {
-        console.log('HTTP server closed');
-    });
+  console.log('🛑 SIGTERM signal received: closing server');
+  server.close(() => {
+    console.log('✅ Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('\n🛑 SIGINT signal received: closing server');
+  server.close(() => {
+    console.log('✅ Server closed');
+    process.exit(0);
+  });
 });
